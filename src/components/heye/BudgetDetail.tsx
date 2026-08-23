@@ -93,10 +93,17 @@ export function BudgetDetail({
           <h1 className="mt-0.5 text-[20px] font-bold tracking-tight">{budget.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
             <span
-              className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                budget.status === "open" ? "bg-ink text-background" : "bg-line text-ink-3"
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
+                budget.status === "open"
+                  ? "bg-good-soft text-good"
+                  : "bg-line text-ink-3"
               }`}
             >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  budget.status === "open" ? "bg-good" : "bg-ink-3"
+                }`}
+              />
               {budget.status === "open" ? "ĐANG CHẠY" : "ĐÃ BÀN GIAO"}
             </span>
             {budget.code && <span className="num">{budget.code}</span>}
