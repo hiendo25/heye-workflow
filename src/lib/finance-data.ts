@@ -167,6 +167,8 @@ export type FinanceData = {
   timeEntries: TimeEntry[];
   submissions: TimesheetSubmission[];
   timerLogs: TimerLog[];
+  expenses: Expense[];
+  expenseItems: ExpenseItem[];
   timeSettings: TimeSettings | null;
 };
 
@@ -187,7 +189,7 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs,
+    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs, expenses, expenseItems,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -203,11 +205,14 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<TimesheetSubmission>("timesheet_submissions", "week_start"),
       all<TimeSettings>("time_settings"),
       all<TimerLog>("timer_logs", "started_at"),
+      all<Expense>("expenses", "date"),
+      all<ExpenseItem>("expense_items", "position"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
     submissions, timeSettings: timeSettings[0] ?? null, timerLogs,
+    expenses, expenseItems,
   };
 }
 
@@ -799,4 +804,125 @@ export function fmtClock(startedAt: string, baseMinutes: number, now = new Date(
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/* ================= Chi phí (Expense) ================= */
+
+export type ExpenseStatus = "submitted" | "approved" | "changes_requested" | "cancelled";
+
+export type Expense = {
+  id: string;
+  namespace_id: string;
+  user_id: string;
+  service_id: string;
+  ticket_id: string | null;
+  reference: string;
+  date: string;
+  due_date: string | null;
+  currency: string;
+  vendor: string | null;
+  note: string | null;
+  attachment_name: string | null;
+  markup_type: "percent" | "fixed";
+  markup_value: number;
+  status: ExpenseStatus;
+  approved_at: string | null;
+  approved_by: string | null;
+  review_note: string | null;
+  is_paid: boolean;
+  paid_at: string | null;
+  is_reimbursed: boolean;
+};
+
+export type ExpenseItem = {
+  id: string;
+  expense_id: string;
+  description: string;
+  unit_price: number;
+  quantity: number;
+  tax_rate: number;
+  tax_included: boolean;
+  position: number;
+};
+
+export const EXPENSE_STATUS_LABEL: Record<ExpenseStatus, string> = {
+  submitted: "Chờ duyệt",
+  approved: "Đã duyệt",
+  changes_requested: "Cần sửa lại",
+  cancelled: "Đã huỷ",
+};
+
+/**
+ * Tiền của một dòng chi phí, tách rõ phần trước thuế và phần thuế.
+ *
+ * `tax_included = true` nghĩa là đơn giá đã gồm thuế, phải bóc ngược ra:
+ * net = gộp / (1 + thuế%). Nếu không bóc, phụ giá sẽ tính cả trên phần
+ * thuế — mà thuế là tiền trả nhà nước, không phải giá vốn thật.
+ */
+export function expenseItemAmounts(i: ExpenseItem): {
+  net: number;
+  tax: number;
+  gross: number;
+} {
+  const raw = Number(i.unit_price) * Number(i.quantity);
+  const rate = Number(i.tax_rate) / 100;
+  if (i.tax_included) {
+    const net = rate ? raw / (1 + rate) : raw;
+    return { net, tax: raw - net, gross: raw };
+  }
+  return { net: raw, tax: raw * rate, gross: raw * (1 + rate) };
+}
+
+/**
+ * Tổng tiền một phiếu chi phí.
+ *
+ * Điểm quan trọng: `billable` (tiền tính cho khách) tính từ giá TRƯỚC THUẾ.
+ * Thuế đầu vào là thứ ta trả nhà cung cấp; khi xuất hoá đơn cho khách thì
+ * áp thuế riêng của mình. Trộn hai thứ lại là tính trùng thuế.
+ */
+export function expenseTotals(
+  e: Expense,
+  items: ExpenseItem[],
+): { net: number; tax: number; gross: number; billable: number; profit: number } {
+  const rows = items.filter((i) => i.expense_id === e.id);
+  const net = rows.reduce((a, i) => a + expenseItemAmounts(i).net, 0);
+  const tax = rows.reduce((a, i) => a + expenseItemAmounts(i).tax, 0);
+
+  const billable =
+    e.markup_type === "fixed"
+      ? Number(e.markup_value)
+      : net * (1 + Number(e.markup_value) / 100);
+
+  return { net, tax, gross: net + tax, billable, profit: billable - net };
+}
+
+/**
+ * Chi phí này đóng góp gì vào hợp đồng.
+ *
+ *   Đã duyệt   -> cả chi phí lẫn doanh thu
+ *   Chờ duyệt  -> chỉ chi phí (nguyên tắc thận trọng: không giấu chi phí
+ *                 chỉ vì chưa ai bấm duyệt)
+ *   Từ chối/huỷ -> không tính gì
+ *
+ * Hạng mục không tính tiền thì không bao giờ sinh doanh thu.
+ */
+export function expenseImpact(
+  e: Expense,
+  items: ExpenseItem[],
+  service: BudgetService | undefined,
+): { cost: number; revenue: number } {
+  if (e.status === "cancelled" || e.status === "changes_requested")
+    return { cost: 0, revenue: 0 };
+
+  const { net, billable } = expenseTotals(e, items);
+  const free = !service || service.billing_type === "non_billable";
+  return {
+    cost: net,
+    revenue: e.status === "approved" && !free ? billable : 0,
+  };
+}
+
+/** Hạng mục ghi được chi phí: đơn vị 'gói' và đã bật cho ghi chi phí. */
+export function expenseServices(services: BudgetService[]): BudgetService[] {
+  return services.filter((s) => s.allow_expense && s.unit === "piece");
 }

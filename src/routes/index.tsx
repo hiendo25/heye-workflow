@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/heye/Sidebar";
 import { TicketTable, type Row } from "@/components/heye/TicketTable";
 import { TicketDetail } from "@/components/heye/TicketDetail";
 import { buildTree, findNode, workspaceQuery, type TreeNode } from "@/lib/heye-data";
-import { financeQuery, updateRow } from "@/lib/finance-data";
+import { deleteRow, financeQuery, insertRow, updateRow } from "@/lib/finance-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,6 +39,15 @@ function Index() {
 
   // Gán hạng mục cho công việc. Lưu xong nạp lại cả hai nguồn dữ liệu vì
   // cột Hạng mục trong bảng đọc từ workspace, còn chi tiết đọc từ finance.
+  const logTime = useMutation({
+    mutationFn: async (v: Record<string, unknown>) => insertRow("time_entries", v),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
+  const delTime = useMutation({
+    mutationFn: async (id: string) => deleteRow("time_entries", id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
+
   const setService = useMutation({
     mutationFn: async (v: { id: string; serviceId: string | null }) =>
       updateRow("tickets", v.id, { budget_service_id: v.serviceId }),
@@ -187,6 +196,10 @@ function Index() {
             onSetService={(serviceId) =>
               setService.mutate({ id: open.ticket.id, serviceId })
             }
+            allUsers={data?.users ?? []}
+            nsId={data?.namespace?.id ?? ""}
+            onLogTime={(v) => logTime.mutate(v)}
+            onDeleteTime={(id) => delTime.mutate(id)}
           />
         )}
     </AppShell>

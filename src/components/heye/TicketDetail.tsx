@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { Ban, Clock, Coins, FileSignature, Folder, Tag as TagIcon, X } from "lucide-react";
+import { Ban, Clock, Coins, FileSignature, Folder, Plus, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -12,7 +21,12 @@ import {
 } from "@/components/ui/select";
 import {
   BILLING_LABEL,
+  costRateFor,
+  fmtDuration,
+  isoDate,
   money,
+  parseDuration,
+  whyCannotTrack,
   UNIT_LABEL,
   type Budget,
   type BudgetService,
@@ -37,6 +51,10 @@ export function TicketDetail({
   data,
   onClose,
   onSetService,
+  onLogTime,
+  onDeleteTime,
+  allUsers,
+  nsId,
 }: {
   ticket: Ticket;
   status: Status | undefined;
@@ -47,8 +65,13 @@ export function TicketDetail({
   data: FinanceData;
   onClose: () => void;
   onSetService: (serviceId: string | null) => void;
+  onLogTime: (v: Record<string, unknown>) => void;
+  onDeleteTime: (id: string) => void;
+  allUsers: User[];
+  nsId: string;
 }) {
   const [saving, setSaving] = useState(false);
+  const [logging, setLogging] = useState(false);
 
   // Chỉ hạng mục của hợp đồng đã nối với dự án này.
   const budgets = data.budgets.filter((b) => b.project_id === projectId);
@@ -159,20 +182,76 @@ export function TicketDetail({
               )}
             </section>
 
-            <section className="rounded-xl border border-line bg-surface p-4">
-              <div className="flex items-center gap-2">
+            <section className="rounded-xl border border-line bg-surface">
+              <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
                 <Clock size={14} className="text-ink-3" />
                 <h3 className="text-[12.5px] font-bold">Thời gian</h3>
-                <div className="flex-1" />
-                <span className="num text-[12.5px] font-semibold">
-                  {Math.floor(logged / 60)}:{String(logged % 60).padStart(2, "0")}
+                <span className="num text-[12.5px] font-semibold text-ink-2">
+                  {fmtDuration(logged)}
                 </span>
+                <div className="flex-1" />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!current}
+                  onClick={() => setLogging(true)}
+                  title={current ? "" : "Gán hạng mục trước khi ghi giờ"}
+                >
+                  <Plus size={13} /> Ghi nhận giờ
+                </Button>
               </div>
-              <p className="mt-2 text-[12px] text-ink-3">
-                {entries.length === 0
-                  ? "Chưa ai log giờ trên công việc này."
-                  : `${entries.length} dòng giờ đã ghi nhận.`}
-              </p>
+
+              {entries.length === 0 ? (
+                <p className="px-4 py-4 text-[12px] text-ink-3">
+                  Chưa ai ghi giờ trên công việc này.
+                  {!current && " Cần gán hạng mục trước."}
+                </p>
+              ) : (
+                <div>
+                  {entries.map((e) => {
+                    const who = allUsers.find((u) => u.id === e.user_id);
+                    const locked = !!e.approved_at;
+                    return (
+                      <div
+                        key={e.id}
+                        className="flex items-center gap-2.5 border-b border-line px-4 py-2 last:border-0"
+                      >
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                          style={{ backgroundColor: who?.avatar_color ?? "#8B87A0" }}
+                        >
+                          {who?.initial ?? "?"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[12.5px] font-medium">{who?.full_name ?? "—"}</div>
+                          <div className="truncate text-[11px] text-ink-3">
+                            {fmtDay(e.date)}
+                            {e.note ? ` · ${e.note}` : ""}
+                          </div>
+                        </div>
+                        {locked && (
+                          <span className="rounded bg-good-soft px-1.5 py-0.5 text-[10px] font-semibold text-good">
+                            đã duyệt
+                          </span>
+                        )}
+                        <span className="num shrink-0 text-[12.5px] font-semibold">
+                          {fmtDuration(e.minutes)}
+                        </span>
+                        {!locked && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTime(e.id)}
+                            className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                            aria-label="Xoá dòng giờ"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
 
@@ -238,6 +317,21 @@ export function TicketDetail({
           </aside>
         </div>
       </div>
+
+      {logging && current && (
+        <LogTimeDialog
+          service={current}
+          ticketId={ticket.id}
+          users={allUsers}
+          data={data}
+          nsId={nsId}
+          onClose={() => setLogging(false)}
+          onSubmit={(v) => {
+            onLogTime(v);
+            setLogging(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -341,3 +435,160 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+/**
+ * Ghi giờ ngay trên công việc — đúng chỗ Productive đặt (tab Time của task).
+ * Cho chọn NGƯỜI vì quản lý ghi hộ nhân viên là chuyện thường gặp.
+ */
+function LogTimeDialog({
+  service,
+  ticketId,
+  users,
+  data,
+  nsId,
+  onClose,
+  onSubmit,
+}: {
+  service: BudgetService;
+  ticketId: string;
+  users: User[];
+  data: FinanceData;
+  nsId: string;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [userId, setUserId] = useState(users[0]?.id ?? "");
+  const [dur, setDur] = useState("");
+  const [date, setDate] = useState(isoDate(new Date()));
+  const [note, setNote] = useState("");
+
+  const minutes = parseDuration(dur);
+  const free = service.billing_type === "non_billable";
+  const isInternal = data.budgets.find((b) => b.id === service.budget_id)?.is_internal ?? false;
+  const blocked = userId ? whyCannotTrack(data, service.id, userId, date) : null;
+  const rate = userId
+    ? costRateFor(data, userId, { onDate: date, budgetId: service.budget_id, isInternal })
+    : { total: 0, source: "none" as const };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>Ghi nhận giờ</DialogTitle>
+          <DialogDescription>
+            Giờ tính vào hạng mục <b>{service.name}</b>. Chọn người khác nếu bạn ghi hộ.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <FF label="Người làm" required>
+            <Select value={userId} onValueChange={setUserId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn người" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FF>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FF label="Thời lượng" required>
+              <Input
+                className="num"
+                autoFocus
+                value={dur}
+                placeholder="8h · 9-17 · 1h30"
+                onChange={(e) => setDur(e.target.value)}
+              />
+            </FF>
+            <FF label="Ngày">
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </FF>
+          </div>
+
+          <FF label="Ghi chú">
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Đã làm gì" />
+          </FF>
+
+          {blocked && (
+            <div className="rounded-lg border-l-[3px] border-bad bg-bad-soft px-3 py-2 text-[12.5px]">
+              {blocked}
+            </div>
+          )}
+
+          {minutes > 0 && !blocked && (
+            <div className="rounded-lg bg-brand-soft px-3 py-2 text-[12.5px]">
+              <div className="flex justify-between">
+                <span className="text-ink-2">
+                  {fmtDuration(minutes)} × {money(Math.round(rate.total))} đ/giờ
+                </span>
+                <span className="num font-bold text-brand">
+                  {money(Math.round((minutes / 60) * rate.total))} đ
+                </span>
+              </div>
+              {free && (
+                <p className="mt-1 text-[11.5px] text-ink-3">
+                  Hạng mục không tính tiền: vẫn tốn chi phí nhưng không sinh doanh thu.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!userId || minutes <= 0 || !!blocked}
+            onClick={() =>
+              onSubmit({
+                namespace_id: nsId,
+                user_id: userId,
+                service_id: service.id,
+                ticket_id: ticketId,
+                date,
+                minutes,
+                billable_minutes: free ? 0 : minutes,
+                note: note.trim() || null,
+                cost_rate_snapshot: Math.round(rate.total),
+              })
+            }
+          >
+            Ghi nhận
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FF({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+        {label}
+        {required && <span className="ml-0.5 text-bad">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const fmtDay = (v: string) => {
+  const [y, m, d] = v.split("-");
+  return `${d}/${m}/${y}`;
+};
