@@ -95,12 +95,24 @@ export type BudgetService = {
   position: number;
 };
 
+export type RateType = "hourly" | "weekly" | "biweekly" | "monthly" | "annual";
+
 export type CostRate = {
   id: string;
   namespace_id: string;
   user_id: string;
-  rate: number;
-  valid_from: string;
+  rate_type: RateType;
+  amount: number;
+  currency: string;
+  hours_mon: number;
+  hours_tue: number;
+  hours_wed: number;
+  hours_thu: number;
+  hours_fri: number;
+  hours_sat: number;
+  hours_sun: number;
+  start_date: string;
+  end_date: string | null;
   add_overhead: boolean;
   note: string | null;
 };
@@ -254,27 +266,150 @@ export const deleteRow = (table: string, id: string) =>
 
 /* ================= Giá vốn nhân sự ================= */
 
-/**
- * Chi phí gián tiếp phân bổ lên mỗi giờ làm việc.
- *
- *   Overhead/giờ = chi phí gián tiếp tháng / tổng giờ làm việc tháng
- *
- * Gồm mặt bằng, điện nước, máy móc, HR, kế toán, quản lý — những thứ
- * không gắn vào dự án nào nhưng vẫn phải trả. Bỏ qua thì biên lợi nhuận
- * luôn đẹp giả tạo.
- */
-export function overheadPerHour(o: OverheadSettings | null): number {
-  if (!o || !o.is_enabled || !o.monthly_hours) return 0;
-  return o.monthly_cost / o.monthly_hours;
+export const RATE_TYPE_LABEL: Record<RateType, string> = {
+  hourly: "Theo giờ",
+  weekly: "Theo tuần",
+  biweekly: "Hai tuần",
+  monthly: "Theo tháng",
+  annual: "Theo năm",
+};
+
+/** Nhãn ô nhập tiền, đổi theo kỳ đã chọn. */
+export const RATE_AMOUNT_LABEL: Record<RateType, string> = {
+  hourly: "Chi phí mỗi giờ",
+  weekly: "Chi phí mỗi tuần",
+  biweekly: "Chi phí mỗi hai tuần",
+  monthly: "Chi phí mỗi tháng",
+  annual: "Chi phí mỗi năm",
+};
+
+/** Tổng giờ làm việc một tuần theo lịch đã đặt. */
+export function weeklyHours(r: Pick<CostRate,
+  "hours_mon"|"hours_tue"|"hours_wed"|"hours_thu"|"hours_fri"|"hours_sat"|"hours_sun">): number {
+  return (
+    Number(r.hours_mon) + Number(r.hours_tue) + Number(r.hours_wed) + Number(r.hours_thu) +
+    Number(r.hours_fri) + Number(r.hours_sat) + Number(r.hours_sun)
+  );
+}
+
+/** Số giờ theo lịch cho một ngày cụ thể (0 = Chủ nhật). */
+function hoursOfWeekday(r: CostRate, weekday: number): number {
+  const map = [r.hours_sun, r.hours_mon, r.hours_tue, r.hours_wed, r.hours_thu, r.hours_fri, r.hours_sat];
+  return Number(map[weekday] ?? 0);
 }
 
 /**
- * Giá vốn 1 giờ của một người, theo thứ tự ưu tiên:
+ * Số giờ làm việc THỰC TẾ trong một khoảng ngày, đếm theo lịch từng thứ
+ * và TRỪ ngày nghỉ lễ.
  *
- *   1. Giá riêng của hợp đồng   (nếu đang tính trong 1 hợp đồng cụ thể)
- *   2. Giá mặc định của người   (bản có hiệu lực gần nhất tính tới ngày cần)
+ * Đây là cách Productive tính: không dùng hệ số cố định kiểu "4 tuần/tháng",
+ * mà đếm đúng số ngày làm việc có thật trong kỳ. Kiểm chứng với ví dụ trong
+ * tài liệu: năm 2024 ra 2.064 giờ (2.096 giờ theo lịch trừ 4 ngày lễ).
+ */
+export function capacityBetween(
+  r: CostRate,
+  from: Date,
+  to: Date,
+  holidays?: Set<string>,
+): number {
+  let total = 0;
+  const d = new Date(from);
+  while (d <= to) {
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+    if (!holidays?.has(iso)) total += hoursOfWeekday(r, d.getDay());
+    d.setDate(d.getDate() + 1);
+  }
+  return total;
+}
+
+/** Ngày nghỉ lễ Việt Nam — trừ khỏi số giờ làm việc khi tính giá vốn giờ. */
+export const VN_HOLIDAYS = new Set<string>([
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20",
+  "2026-04-26", "2026-04-30", "2026-05-01", "2026-09-02",
+  "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-03",
+  "2025-04-07", "2025-04-30", "2025-05-01", "2025-09-02",
+]);
+
+/** Kỳ lịch TRỌN VẸN chứa ngày `on` — theo loại kỳ lương. */
+function fullPeriod(r: CostRate, on: Date): { from: Date; to: Date } {
+  const y = on.getFullYear();
+  const m = on.getMonth();
+  if (r.rate_type === "annual") {
+    return { from: new Date(y, 0, 1), to: new Date(y, 11, 31) };
+  }
+  if (r.rate_type === "monthly") {
+    return { from: new Date(y, m, 1), to: new Date(y, m + 1, 0) };
+  }
+  // weekly / biweekly: tuần bắt đầu từ thứ Hai
+  const day = on.getDay();
+  const back = day === 0 ? 6 : day - 1;
+  const start = new Date(y, m, on.getDate() - back);
+  const len = r.rate_type === "biweekly" ? 13 : 6;
+  const end = new Date(start);
+  end.setDate(end.getDate() + len);
+  return { from: start, to: end };
+}
+
+/**
+ * GIÁ VỐN MỘT GIỜ.
  *
- * Overhead chỉ cộng khi người đó bật `add_overhead`.
+ *   Giá vốn giờ = Lương của kỳ / Số giờ làm việc của TRỌN kỳ lịch
+ *
+ * Ví dụ trong tài liệu Productive: 60.000$/năm ÷ 2.064 giờ = 29,07$/giờ.
+ * Dùng trọn kỳ lịch (không phải từ ngày bắt đầu hiệu lực) để mức lương
+ * bắt đầu giữa kỳ không bị đội giá giờ lên.
+ */
+export function hourlyCost(r: CostRate, onDate?: string): number {
+  if (r.rate_type === "hourly") return Number(r.amount);
+  const on = onDate ? new Date(onDate) : new Date(r.start_date);
+  const { from, to } = fullPeriod(r, on);
+  const cap = capacityBetween(r, from, to, VN_HOLIDAYS);
+  return cap ? Number(r.amount) / cap : 0;
+}
+
+/** Số giờ làm việc của trọn kỳ chứa ngày đang xét — hiện để đối chiếu. */
+export function periodCapacity(r: CostRate, onDate?: string): number {
+  if (r.rate_type === "hourly") return 0;
+  const on = onDate ? new Date(onDate) : new Date(r.start_date);
+  const { from, to } = fullPeriod(r, on);
+  return capacityBetween(r, from, to, VN_HOLIDAYS);
+}
+
+/**
+ * Chi phí gián tiếp phân bổ lên mỗi giờ làm việc.
+ * Mặt bằng, điện nước, HR, kế toán — không gắn dự án nào nhưng vẫn phải trả.
+ */
+export function overheadPerHour(o: OverheadSettings | null): number {
+  if (!o || !o.is_enabled || !o.monthly_hours) return 0;
+  return Number(o.monthly_cost) / Number(o.monthly_hours);
+}
+
+/** Bản giá vốn có hiệu lực tại một ngày (nằm trong khoảng start..end). */
+export function rateOnDate(rates: CostRate[], userId: string, onDate?: string): CostRate | null {
+  const day = onDate ?? new Date().toISOString().slice(0, 10);
+  return (
+    rates
+      .filter(
+        (r) => r.user_id === userId && r.start_date <= day && (!r.end_date || r.end_date >= day),
+      )
+      .sort((a, b) => b.start_date.localeCompare(a.start_date))[0] ?? null
+  );
+}
+
+/** Toàn bộ lịch sử giá vốn của một người, mới nhất trước. */
+export function rateHistory(rates: CostRate[], userId: string): CostRate[] {
+  return rates
+    .filter((r) => r.user_id === userId)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date));
+}
+
+/**
+ * Giá vốn thực một giờ, theo thứ tự ưu tiên:
+ *   1. Giá riêng của hợp đồng (nếu đang tính trong 1 hợp đồng cụ thể)
+ *   2. Giá theo kỳ lương của người đó, quy về giờ
+ * Overhead chỉ cộng khi người đó bật.
  */
 export function costRateFor(
   data: Pick<FinanceData, "costRates" | "budgetCostRates" | "overhead">,
@@ -282,45 +417,25 @@ export function costRateFor(
   opts?: { budgetId?: string; onDate?: string },
 ): { base: number; overhead: number; total: number; source: "budget" | "default" | "none" } {
   const oh = overheadPerHour(data.overhead);
+  const def = rateOnDate(data.costRates, userId, opts?.onDate);
 
   if (opts?.budgetId) {
     const custom = data.budgetCostRates.find(
       (r) => r.budget_id === opts.budgetId && r.user_id === userId,
     );
     if (custom) {
-      // Giá riêng theo hợp đồng vẫn cộng overhead nếu người đó bật.
-      const def = latestRate(data.costRates, userId, opts.onDate);
       const add = def?.add_overhead ? oh : 0;
-      return { base: custom.rate, overhead: add, total: custom.rate + add, source: "budget" };
+      return {
+        base: Number(custom.rate),
+        overhead: add,
+        total: Number(custom.rate) + add,
+        source: "budget",
+      };
     }
   }
 
-  const def = latestRate(data.costRates, userId, opts?.onDate);
   if (!def) return { base: 0, overhead: 0, total: 0, source: "none" };
+  const base = hourlyCost(def, opts?.onDate);
   const add = def.add_overhead ? oh : 0;
-  return { base: def.rate, overhead: add, total: def.rate + add, source: "default" };
-}
-
-/**
- * Bản giá vốn có hiệu lực tại một ngày.
- * Tăng lương thì tạo bản mới với valid_from mới — chi phí của những giờ
- * đã log trước đó vẫn tính theo bản cũ, số liệu lịch sử không đổi.
- */
-export function latestRate(
-  rates: CostRate[],
-  userId: string,
-  onDate?: string,
-): CostRate | null {
-  const day = onDate ?? new Date().toISOString().slice(0, 10);
-  const mine = rates
-    .filter((r) => r.user_id === userId && r.valid_from <= day)
-    .sort((a, b) => b.valid_from.localeCompare(a.valid_from));
-  return mine[0] ?? null;
-}
-
-/** Toàn bộ lịch sử giá vốn của một người, mới nhất trước. */
-export function rateHistory(rates: CostRate[], userId: string): CostRate[] {
-  return rates
-    .filter((r) => r.user_id === userId)
-    .sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+  return { base, overhead: add, total: base + add, source: "default" };
 }

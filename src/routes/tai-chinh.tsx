@@ -1215,6 +1215,7 @@ function CostPanel({
       users={users}
       nsId={nsId}
       onSaveRate={(v) => save.mutate(() => insertRow("cost_rates", v))}
+      onUpdateRate={(id, v) => save.mutate(() => updateRow("cost_rates", id, v))}
       onDeleteRate={(id) => save.mutate(() => deleteRow("cost_rates", id))}
       onSaveOverhead={(v) =>
         save.mutate(() =>
