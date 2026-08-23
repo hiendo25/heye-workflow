@@ -7,6 +7,7 @@ import {
   Building2,
   Clock,
   Coins,
+  CalendarRange,
   Receipt,
   Users2,
   FileSignature,
@@ -23,6 +24,7 @@ import { CostRatePanel } from "@/components/heye/CostRatePanel";
 import { MyTime } from "@/components/heye/MyTime";
 import { CompanyTime } from "@/components/heye/CompanyTime";
 import { Expenses } from "@/components/heye/Expenses";
+import { ResourcePlanner } from "@/components/heye/ResourcePlanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -99,6 +101,7 @@ const NAV = [
   { id: "time", label: "Giờ của tôi", icon: Clock },
   { id: "company", label: "Giờ toàn công ty", icon: Users2 },
   { id: "expenses", label: "Chi phí", icon: Receipt },
+  { id: "planner", label: "Xếp lịch", icon: CalendarRange },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -164,6 +167,8 @@ function TaiChinh() {
           <BudgetsPanel data={data} nsId={nsId} users={ws?.users ?? []} />
         ) : tab === "cost" ? (
           <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
+        ) : tab === "planner" ? (
+          <PlannerPanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : tab === "expenses" ? (
           <ExpensePanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : tab === "company" ? (
@@ -1618,6 +1623,30 @@ function ExpensePanel({
           }),
         )
       }
+    />
+  );
+}
+
+/* ================= Xếp lịch ================= */
+
+function PlannerPanel({
+  data,
+  users,
+  nsId,
+}: {
+  data: FinanceData;
+  users: User[];
+  nsId: string;
+}) {
+  const save = useSave();
+  return (
+    <ResourcePlanner
+      data={data}
+      users={users}
+      nsId={nsId}
+      onCreate={(v) => save.mutate(() => insertRow("bookings", v))}
+      onUpdate={(id, v) => save.mutate(() => updateRow("bookings", id, v))}
+      onDelete={(id) => save.mutate(() => deleteRow("bookings", id))}
     />
   );
 }
