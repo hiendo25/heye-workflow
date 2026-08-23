@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Building2, Pencil, Tags, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Building2, Layers, Pencil, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/heye/AppShell";
 import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
@@ -61,10 +61,13 @@ export const Route = createFileRoute("/tai-chinh")({
   component: TaiChinh,
 });
 
+// Xếp theo THỨ TỰ KHAI BÁO, không theo mức độ quan trọng:
+// loại dịch vụ (danh mục) → khách hàng (chủ thể) → bảng giá (cần cả hai).
+// Người dùng lần đầu đi từ trên xuống là ra dữ liệu hợp lệ.
 const NAV = [
-  { id: "clients", label: "Khách hàng", icon: Building2 },
-  { id: "rates", label: "Bảng giá", icon: Tags },
-  { id: "types", label: "Loại dịch vụ", icon: Tags },
+  { id: "types", label: "Loại dịch vụ", icon: Layers, step: 1 },
+  { id: "clients", label: "Khách hàng", icon: Building2, step: 2 },
+  { id: "rates", label: "Bảng giá", icon: Tags, step: 3 },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -73,8 +76,13 @@ const PALETTE = ["#2563EB", "#7C3AED", "#0E9F6E", "#D97706", "#DB2777", "#0891B2
 function TaiChinh() {
   const { data: ws } = useQuery(workspaceQuery);
   const { data, isLoading, error } = useQuery(financeQuery);
-  const [tab, setTab] = useState<Tab>("clients");
+  const [tab, setTab] = useState<Tab>("types");
   const [clientId, setClientId] = useState<string | null>(null);
+
+  // Nguồn tin cậy duy nhất cho namespace_id. KHÔNG suy ra từ hàng dữ liệu con:
+  // khi người dùng xoá hết khách/loại dịch vụ để tự tạo lại thì mảng rỗng,
+  // giá trị rơi về "" và Postgres báo invalid input syntax for type uuid.
+  const nsId = ws?.namespace?.id ?? null;
 
   return (
     <AppShell namespaceName={ws?.namespace?.name}>
@@ -95,7 +103,8 @@ function TaiChinh() {
               }`}
             >
               <s.icon size={15} />
-              {s.label}
+              <span className="flex-1">{s.label}</span>
+              <span className="num text-[10.5px] text-ink-3">{s.step}</span>
             </button>
           ))}
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
@@ -122,14 +131,14 @@ function TaiChinh() {
             </code>{" "}
             trên Supabase.
           </div>
-        ) : isLoading || !data ? (
+        ) : isLoading || !data || !nsId ? (
           <div className="py-16 text-center text-[13px] text-ink-3">Đang tải…</div>
         ) : tab === "clients" ? (
-          <ClientsPanel data={data} />
+          <ClientsPanel data={data} nsId={nsId} />
         ) : tab === "types" ? (
-          <TypesPanel data={data} />
+          <TypesPanel data={data} nsId={nsId} />
         ) : (
-          <RatesPanel data={data} clientId={clientId} setClientId={setClientId} />
+          <RatesPanel data={data} nsId={nsId} clientId={clientId} setClientId={setClientId} />
         )}
       </main>
     </AppShell>
@@ -155,11 +164,10 @@ function useSave() {
 
 /* ================= Khách hàng ================= */
 
-function ClientsPanel({ data }: { data: FinanceData }) {
+function ClientsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
   const save = useSave();
   const [edit, setEdit] = useState<ClientCompany | "new" | null>(null);
   const [del, setDel] = useState<ClientCompany | null>(null);
-  const ns = data.clients[0]?.namespace_id ?? "";
 
   return (
     <>
@@ -211,6 +219,7 @@ function ClientsPanel({ data }: { data: FinanceData }) {
       </SettingsPanel>
 
       <ClientDialog
+        key={edit === "new" ? "new" : (edit?.id ?? "closed")}
         open={edit !== null}
         value={edit === "new" ? null : edit}
         onClose={() => setEdit(null)}
@@ -218,7 +227,7 @@ function ClientsPanel({ data }: { data: FinanceData }) {
           save.mutate(
             () =>
               edit === "new"
-                ? insertRow("client_companies", { ...v, namespace_id: ns })
+                ? insertRow("client_companies", { ...v, namespace_id: nsId })
                 : updateRow("client_companies", (edit as ClientCompany).id, v),
             { onSuccess: () => setEdit(null) },
           )
@@ -272,12 +281,11 @@ function ClientDialog({
 
 /* ================= Loại dịch vụ ================= */
 
-function TypesPanel({ data }: { data: FinanceData }) {
+function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
   const save = useSave();
   const [edit, setEdit] = useState<ServiceType | "new" | null>(null);
   const [del, setDel] = useState<ServiceType | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const ns = data.serviceTypes[0]?.namespace_id ?? data.clients[0]?.namespace_id ?? "";
 
   const usage = useMemo(() => {
     const m = new Map<string, number>();
@@ -351,6 +359,7 @@ function TypesPanel({ data }: { data: FinanceData }) {
       </SettingsPanel>
 
       <TypeDialog
+        key={edit === "new" ? "new" : (edit?.id ?? "closed")}
         open={edit !== null}
         value={edit === "new" ? null : edit}
         onClose={() => setEdit(null)}
@@ -360,7 +369,7 @@ function TypesPanel({ data }: { data: FinanceData }) {
               edit === "new"
                 ? insertRow("service_types", {
                     ...v,
-                    namespace_id: ns,
+                    namespace_id: nsId,
                     position: data.serviceTypes.length + 1,
                   })
                 : updateRow("service_types", (edit as ServiceType).id, v),
@@ -401,7 +410,6 @@ function TypeDialog({
 
   return (
     <FormDialog
-      key={value?.id ?? "new"}
       open={open}
       onClose={onClose}
       title={value ? "Sửa loại dịch vụ" : "Thêm loại dịch vụ"}
@@ -438,10 +446,12 @@ function TypeDialog({
 
 function RatesPanel({
   data,
+  nsId,
   clientId,
   setClientId,
 }: {
   data: FinanceData;
+  nsId: string;
   clientId: string | null;
   setClientId: (id: string | null) => void;
 }) {
@@ -449,7 +459,6 @@ function RatesPanel({
   const [cardEdit, setCardEdit] = useState<RateCard | "new" | null>(null);
   const [cardDel, setCardDel] = useState<RateCard | null>(null);
   const [lineFor, setLineFor] = useState<{ card: RateCard; itemId?: string } | null>(null);
-  const ns = data.clients[0]?.namespace_id ?? "";
 
   const visible = data.rateCards.filter(
     (c) => !c.is_archived && (clientId === null || c.client_id === null || c.client_id === clientId),
@@ -585,17 +594,19 @@ function RatesPanel({
       </SettingsPanel>
 
       <RateCardDialog
+        key={cardEdit === "new" ? "new-card" : "closed-card"}
         open={cardEdit !== null}
         clients={data.clients}
         onClose={() => setCardEdit(null)}
         onSubmit={(v) =>
-          save.mutate(() => insertRow("rate_cards", { ...v, namespace_id: ns }), {
+          save.mutate(() => insertRow("rate_cards", { ...v, namespace_id: nsId }), {
             onSuccess: () => setCardEdit(null),
           })
         }
       />
 
       <RateLineDialog
+        key={lineFor ? `${lineFor.card.id}:${lineFor.itemId ?? "new"}` : "closed-line"}
         open={lineFor !== null}
         data={data}
         target={lineFor}
