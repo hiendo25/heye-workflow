@@ -1,10 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Building2, Layers, Pencil, Tags, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Building2,
+  FileSignature,
+  Layers,
+  Pencil,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/heye/AppShell";
 import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
+import { BudgetDetail } from "@/components/heye/BudgetDetail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { workspaceQuery } from "@/lib/heye-data";
 import {
+  budgetTotal,
   deleteRow,
   financeQuery,
   insertRow,
@@ -41,6 +52,7 @@ import {
   priceDelta,
   updateRow,
   UNIT_LABEL,
+  type Budget,
   type ClientCompany,
   type FinanceData,
   type RateCard,
@@ -68,6 +80,7 @@ const NAV = [
   { id: "types", label: "Loại dịch vụ", icon: Layers },
   { id: "clients", label: "Khách hàng", icon: Building2 },
   { id: "rates", label: "Bảng giá", icon: Tags },
+  { id: "budgets", label: "Hợp đồng", icon: FileSignature },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -109,7 +122,7 @@ function TaiChinh() {
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
             Sắp có
           </div>
-          {["Hợp đồng", "Giờ của tôi", "Chi phí", "Giá vốn nhân sự"].map((s) => (
+          {["Giờ của tôi", "Chi phí", "Giá vốn nhân sự"].map((s) => (
             <div key={s} className="px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60">
               {s}
             </div>
@@ -136,6 +149,8 @@ function TaiChinh() {
           <ClientsPanel data={data} nsId={nsId} />
         ) : tab === "types" ? (
           <TypesPanel data={data} nsId={nsId} />
+        ) : tab === "budgets" ? (
+          <BudgetsPanel data={data} nsId={nsId} />
         ) : (
           <RatesPanel data={data} nsId={nsId} clientId={clientId} setClientId={setClientId} />
         )}
@@ -954,5 +969,220 @@ function FilterChip({
     >
       {children}
     </button>
+  );
+}
+
+/* ================= Hợp đồng ================= */
+
+function BudgetsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
+  const save = useSave();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [del, setDel] = useState<Budget | null>(null);
+
+  const current = openId ? data.budgets.find((b) => b.id === openId) : null;
+
+  if (current) {
+    return (
+      <BudgetDetail
+        budget={current}
+        data={data}
+        onBack={() => setOpenId(null)}
+        onAddService={(v) => save.mutate(() => insertRow("budget_services", v))}
+        onDeleteService={(id) => save.mutate(() => deleteRow("budget_services", id))}
+        onAddSection={(name) =>
+          save.mutate(() =>
+            insertRow("budget_sections", {
+              budget_id: current.id,
+              name,
+              position: data.sections.filter((s) => s.budget_id === current.id).length + 1,
+            }),
+          )
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      <SettingsPanel
+        title="Hợp đồng"
+        description={
+          <>
+            Bảng giá chỉ có đơn giá. Hợp đồng thêm <b>số lượng</b> để ra <b>tổng tiền</b> — và
+            đây là nơi duy nhất log giờ, ghi chi phí vào được. Một dự án có thể có nhiều hợp đồng
+            (chia theo giai đoạn), vì mỗi hợp đồng tính lời lỗ riêng.
+          </>
+        }
+      >
+        {data.budgets.length === 0 && (
+          <div className="px-4 py-5 text-[12.5px] text-ink-3">
+            Chưa có hợp đồng nào. Tạo hợp đồng đầu tiên để bắt đầu bán hàng.
+          </div>
+        )}
+        {data.budgets.map((b) => {
+          const client = data.clients.find((c) => c.id === b.client_id);
+          const svcs = data.services.filter((s) => s.budget_id === b.id);
+          return (
+            <PanelRow
+              key={b.id}
+              meta={
+                <span className="flex items-center gap-3">
+                  <span className="text-[11.5px] text-ink-3">{svcs.length} hạng mục</span>
+                  <span className="num w-32 text-right font-semibold text-ink">
+                    {money(budgetTotal(svcs))}
+                  </span>
+                </span>
+              }
+              actions={[
+                { label: "Mở hợp đồng", icon: <Pencil size={14} />, onSelect: () => setOpenId(b.id) },
+                {
+                  label: b.status === "open" ? "Đánh dấu đã bàn giao" : "Mở lại",
+                  icon: <Archive size={14} />,
+                  onSelect: () =>
+                    save.mutate(() =>
+                      updateRow("budgets", b.id, {
+                        status: b.status === "open" ? "delivered" : "open",
+                      }),
+                    ),
+                },
+                { label: "Xoá", icon: <Trash2 size={14} />, danger: true, onSelect: () => setDel(b) },
+              ]}
+            >
+              <button
+                type="button"
+                onClick={() => setOpenId(b.id)}
+                className="text-left font-medium text-ink hover:text-brand"
+              >
+                {b.name}
+              </button>
+              <div className="text-[11.5px] text-ink-3">
+                {client?.name}
+                {b.status === "delivered" && " · đã bàn giao"}
+              </div>
+            </PanelRow>
+          );
+        })}
+        <PanelFooter>
+          <Button size="sm" onClick={() => setCreating(true)} disabled={data.clients.length === 0}>
+            Thêm hợp đồng
+          </Button>
+          {data.clients.length === 0 && (
+            <span className="text-[12px] text-ink-3">Cần có khách hàng trước</span>
+          )}
+        </PanelFooter>
+      </SettingsPanel>
+
+      <BudgetDialog
+        key={creating ? "new-budget" : "closed-budget"}
+        open={creating}
+        clients={data.clients}
+        onClose={() => setCreating(false)}
+        onSubmit={(v) =>
+          save.mutate(() => insertRow("budgets", { ...v, namespace_id: nsId }), {
+            onSuccess: () => setCreating(false),
+          })
+        }
+      />
+
+      <ConfirmDialog
+        open={del !== null}
+        title={`Xoá hợp đồng "${del?.name ?? ""}"?`}
+        body="Toàn bộ hạng mục bán trong hợp đồng cũng bị xoá. Thao tác không hoàn tác được."
+        onCancel={() => setDel(null)}
+        onConfirm={() =>
+          save.mutate(() => deleteRow("budgets", del!.id), { onSuccess: () => setDel(null) })
+        }
+      />
+    </>
+  );
+}
+
+function BudgetDialog({
+  open,
+  clients,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  clients: ClientCompany[];
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [name, setName] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [code, setCode] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>Thêm hợp đồng</DialogTitle>
+          <DialogDescription>
+            Mỗi hợp đồng tính lời lỗ riêng. Dự án dài có thể chia thành nhiều hợp đồng theo giai đoạn.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Field label="Tên hợp đồng" required>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Core Banking — Giai đoạn 1"
+            />
+          </Field>
+          <Field label="Khách hàng" required>
+            <Select value={clientId} onValueChange={setClientId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn khách hàng" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Số hợp đồng">
+            <Input
+              className="num"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="HD-2026-001"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Từ ngày">
+              <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+            </Field>
+            <Field label="Đến ngày">
+              <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </Field>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!name.trim() || !clientId}
+            onClick={() =>
+              onSubmit({
+                name: name.trim(),
+                client_id: clientId,
+                code: code.trim() || null,
+                start_date: start || null,
+                end_date: end || null,
+              })
+            }
+          >
+            Tạo hợp đồng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

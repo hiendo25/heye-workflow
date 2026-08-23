@@ -54,11 +54,55 @@ export type RateCardItem = {
   position: number;
 };
 
+export type BillingType = "tm" | "fixed" | "non_billable";
+
+export type Budget = {
+  id: string;
+  namespace_id: string;
+  client_id: string;
+  project_id: string | null;
+  name: string;
+  code: string | null;
+  currency: string;
+  start_date: string | null;
+  end_date: string | null;
+  owner_id: string | null;
+  status: "open" | "delivered";
+  is_internal: boolean;
+  note: string | null;
+};
+
+export type BudgetSection = {
+  id: string;
+  budget_id: string;
+  name: string;
+  position: number;
+};
+
+export type BudgetService = {
+  id: string;
+  budget_id: string;
+  section_id: string | null;
+  service_type_id: string;
+  name: string;
+  billing_type: BillingType;
+  unit: "hour" | "day" | "piece";
+  quantity: number;
+  price: number;
+  estimate: number | null;
+  allow_time: boolean;
+  allow_expense: boolean;
+  position: number;
+};
+
 export type FinanceData = {
   clients: ClientCompany[];
   serviceTypes: ServiceType[];
   rateCards: RateCard[];
   rateCardItems: RateCardItem[];
+  budgets: Budget[];
+  sections: BudgetSection[];
+  services: BudgetService[];
 };
 
 type Query = {
@@ -76,13 +120,17 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 }
 
 export async function fetchFinance(): Promise<FinanceData> {
-  const [clients, serviceTypes, rateCards, rateCardItems] = await Promise.all([
-    all<ClientCompany>("client_companies", "name"),
-    all<ServiceType>("service_types", "position"),
-    all<RateCard>("rate_cards", "name"),
-    all<RateCardItem>("rate_card_items", "position"),
-  ]);
-  return { clients, serviceTypes, rateCards, rateCardItems };
+  const [clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services] =
+    await Promise.all([
+      all<ClientCompany>("client_companies", "name"),
+      all<ServiceType>("service_types", "position"),
+      all<RateCard>("rate_cards", "name"),
+      all<RateCardItem>("rate_card_items", "position"),
+      all<Budget>("budgets", "created_at"),
+      all<BudgetSection>("budget_sections", "position"),
+      all<BudgetService>("budget_services", "position"),
+    ]);
+  return { clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services };
 }
 
 export const financeQuery = {
@@ -96,6 +144,30 @@ export const UNIT_LABEL: Record<string, string> = {
   day: "ngày",
   piece: "gói",
 };
+
+export const BILLING_LABEL: Record<BillingType, string> = {
+  tm: "Theo giờ",
+  fixed: "Trọn gói",
+  non_billable: "Không tính tiền",
+};
+
+/** Ai chịu rủi ro khi làm quá dự kiến — điểm quyết định của cách tính tiền. */
+export const BILLING_NOTE: Record<BillingType, string> = {
+  tm: "Làm bao nhiêu tính bấy nhiêu. Vượt dự kiến thì khách trả thêm.",
+  fixed: "Giá cố định. Vượt dự kiến thì công ty tự chịu — nên vẫn phải theo dõi giờ.",
+  non_billable: "Không thu tiền khách nhưng vẫn tính chi phí: họp nội bộ, đào tạo, bảo hành.",
+};
+
+/** Thành tiền một hạng mục. Không tính tiền thì doanh thu bằng 0. */
+export function serviceTotal(s: Pick<BudgetService, "billing_type" | "quantity" | "price">): number {
+  if (s.billing_type === "non_billable") return 0;
+  return s.quantity * s.price;
+}
+
+/** Tổng giá trị hợp đồng. */
+export function budgetTotal(services: BudgetService[]): number {
+  return services.reduce((sum, s) => sum + serviceTotal(s), 0);
+}
 
 /** 700000 -> "700.000" */
 export function money(n: number): string {
