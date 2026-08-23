@@ -61,6 +61,7 @@ import {
   updateRow,
   UNIT_LABEL,
   BILLING_LABEL,
+  timerElapsed,
   type BillingType,
   type Budget,
   type ClientCompany,
@@ -1424,6 +1425,51 @@ function TimePanel({
       onSave={(v) => save.mutate(() => insertRow("time_entries", v))}
       onUpdate={(id, v) => save.mutate(() => updateRow("time_entries", id, v))}
       onDelete={(id) => save.mutate(() => deleteRow("time_entries", id))}
+      onStartTimer={(id) =>
+        save.mutate(async () => {
+          // Mỗi người chỉ một đồng hồ: dừng cái đang chạy trước khi bật cái mới.
+          const running = data.timeEntries.find(
+            (e) => e.user_id === currentUser?.id && e.timer_started_at,
+          );
+          if (running?.timer_started_at) {
+            const mins = timerElapsed(running.timer_started_at);
+            await insertRow("timer_logs", {
+              time_entry_id: running.id,
+              started_at: running.timer_started_at,
+              stopped_at: new Date().toISOString(),
+              minutes: mins,
+            });
+            await updateRow("time_entries", running.id, {
+              minutes: running.minutes + mins,
+              billable_minutes:
+                running.billable_minutes > 0 ? running.billable_minutes + mins : 0,
+              timer_started_at: null,
+            });
+          }
+          await updateRow("time_entries", id, {
+            timer_started_at: new Date().toISOString(),
+          });
+        })
+      }
+      onStopTimer={(id) =>
+        save.mutate(async () => {
+          const e = data.timeEntries.find((x) => x.id === id);
+          if (!e?.timer_started_at) return;
+          const mins = timerElapsed(e.timer_started_at);
+          await insertRow("timer_logs", {
+            time_entry_id: e.id,
+            started_at: e.timer_started_at,
+            stopped_at: new Date().toISOString(),
+            minutes: mins,
+          });
+          const total = e.minutes + mins;
+          await updateRow("time_entries", e.id, {
+            minutes: total,
+            billable_minutes: e.billable_minutes > 0 ? total : 0,
+            timer_started_at: null,
+          });
+        })
+      }
     />
   );
 }

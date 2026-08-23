@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Moon, Sun } from "lucide-react";
 import { IconRail } from "@/components/heye/IconRail";
+import { TimerWidget } from "@/components/heye/TimerWidget";
 
 /** Khung dùng chung: thanh trên + rail trái. Nội dung do từng màn truyền vào. */
 export function AppShell({
@@ -25,6 +26,7 @@ export function AppShell({
           {wsName}
         </span>
         <div className="flex-1" />
+        <TimerWidget />
         <button
           type="button"
           aria-label="Đổi giao diện sáng/tối"

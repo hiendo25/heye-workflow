@@ -166,6 +166,7 @@ export type FinanceData = {
   overhead: OverheadSettings | null;
   timeEntries: TimeEntry[];
   submissions: TimesheetSubmission[];
+  timerLogs: TimerLog[];
   timeSettings: TimeSettings | null;
 };
 
@@ -186,7 +187,7 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings,
+    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -201,11 +202,12 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<TimeEntry>("time_entries", "date"),
       all<TimesheetSubmission>("timesheet_submissions", "week_start"),
       all<TimeSettings>("time_settings"),
+      all<TimerLog>("timer_logs", "started_at"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
-    submissions, timeSettings: timeSettings[0] ?? null,
+    submissions, timeSettings: timeSettings[0] ?? null, timerLogs,
   };
 }
 
@@ -523,6 +525,7 @@ export type TimeEntry = {
   change_requested_at: string | null;
   change_request_note: string | null;
   locked_at: string | null;
+  timer_started_at: string | null;
 };
 
 /**
@@ -741,4 +744,59 @@ export function weekSubmission(
 /** Dòng giờ có bị khoá không — đã duyệt hoặc hết kỳ khoá. */
 export function isEntryLocked(e: TimeEntry): boolean {
   return !!e.approved_at || !!e.locked_at;
+}
+
+/* ================= Bấm giờ ================= */
+
+export type TimerLog = {
+  id: string;
+  time_entry_id: string;
+  started_at: string;
+  stopped_at: string | null;
+  minutes: number;
+  auto_stopped: boolean;
+};
+
+/** Tự dừng sau ngần này giờ không thao tác — theo Productive. */
+export const TIMER_AUTO_STOP_HOURS = 24;
+/** Nhắc qua email sau ngần này giờ. */
+export const TIMER_REMIND_HOURS = 8;
+
+/** Đồng hồ đang chạy của một người, nếu có. */
+export function runningTimer(entries: TimeEntry[], userId: string): TimeEntry | null {
+  return entries.find((e) => e.user_id === userId && e.timer_started_at) ?? null;
+}
+
+/**
+ * Số phút đã trôi kể từ lúc bấm play, làm tròn theo luật Productive:
+ * lẻ từ 30 giây trở lên thì lên phút, dưới 30 giây thì xuống.
+ */
+export function timerElapsed(startedAt: string, now = new Date()): number {
+  const ms = now.getTime() - new Date(startedAt).getTime();
+  return Math.max(0, Math.round(ms / 60000));
+}
+
+/** Tổng phút hiển thị của một dòng đang chạy: đã ghi + đang đếm. */
+export function liveMinutes(e: TimeEntry, now = new Date()): number {
+  return e.timer_started_at ? e.minutes + timerElapsed(e.timer_started_at, now) : e.minutes;
+}
+
+/** Đồng hồ chạy quá lâu, đáng ngờ là quên tắt. */
+export function timerOverrun(startedAt: string, now = new Date()): boolean {
+  return timerElapsed(startedAt, now) >= TIMER_REMIND_HOURS * 60;
+}
+
+/** Đã quá hạn tự dừng chưa. */
+export function timerShouldAutoStop(startedAt: string, now = new Date()): boolean {
+  return timerElapsed(startedAt, now) >= TIMER_AUTO_STOP_HOURS * 60;
+}
+
+/** "1:05:09" — đồng hồ đang chạy, có giây. */
+export function fmtClock(startedAt: string, baseMinutes: number, now = new Date()): string {
+  const ms = now.getTime() - new Date(startedAt).getTime();
+  const total = Math.max(0, Math.floor(ms / 1000)) + baseMinutes * 60;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

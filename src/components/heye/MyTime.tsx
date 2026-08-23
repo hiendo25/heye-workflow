@@ -9,6 +9,7 @@ import {
   Pin,
   Play,
   Plus,
+  Square,
   Table2,
   Trash2,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import {
   isoDate,
   money,
   parseDuration,
+  liveMinutes,
   weekDays,
   weekStartOf,
   weekSubmission,
@@ -61,6 +63,8 @@ export function MyTime({
   onSave,
   onUpdate,
   onDelete,
+  onStartTimer,
+  onStopTimer,
 }: {
   data: FinanceData;
   users: User[];
@@ -71,6 +75,8 @@ export function MyTime({
   onSave: (v: Record<string, unknown>) => void;
   onUpdate: (id: string, v: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
+  onStartTimer: (entryId: string) => void;
+  onStopTimer: (entryId: string) => void;
 }) {
   const [view, setView] = useState<View>("day");
   const [cursor, setCursor] = useState(new Date());
@@ -205,6 +211,8 @@ export function MyTime({
           onAdd={(serviceId) => setAdding({ date: today, serviceId: serviceId ?? undefined })}
           onDelete={onDelete}
           onUpdate={onUpdate}
+          onStartTimer={onStartTimer}
+          onStopTimer={onStopTimer}
         />
       )}
 
@@ -239,6 +247,8 @@ function DayView({
   onAdd,
   onDelete,
   onUpdate,
+  onStartTimer,
+  onStopTimer,
 }: {
   data: FinanceData;
   tickets: Ticket[];
@@ -247,6 +257,8 @@ function DayView({
   onAdd: (serviceId?: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, v: Record<string, unknown>) => void;
+  onStartTimer: (entryId: string) => void;
+  onStopTimer: (entryId: string) => void;
 }) {
   // Gợi ý: hạng mục vừa dùng gần đây, để bấm một phát là ra dòng mới.
   const recent = useMemo(() => {
@@ -295,7 +307,7 @@ function DayView({
                     <span className="block truncate text-[12.5px] font-medium">{s.name}</span>
                     <span className="block truncate text-[11px] text-ink-3">{b?.name}</span>
                   </span>
-                  <Play size={12} className="mt-1 shrink-0 text-ink-3" />
+                  <Plus size={12} className="mt-1 shrink-0 text-ink-3" />
                 </button>
               );
             })}
@@ -320,6 +332,9 @@ function DayView({
                 tickets={tickets}
                 onDelete={() => onDelete(e.id)}
                 onUpdate={(v) => onUpdate(e.id, v)}
+                onStartTimer={() => onStartTimer(e.id)}
+                onStopTimer={() => onStopTimer(e.id)}
+                isToday={date === isoDate(new Date())}
               />
             ))}
           </div>
@@ -335,12 +350,18 @@ function EntryRow({
   tickets,
   onDelete,
   onUpdate,
+  onStartTimer,
+  onStopTimer,
+  isToday,
 }: {
   entry: TimeEntry;
   data: FinanceData;
   tickets: Ticket[];
   onDelete: () => void;
   onUpdate: (v: Record<string, unknown>) => void;
+  onStartTimer: () => void;
+  onStopTimer: () => void;
+  isToday: boolean;
 }) {
   const [dur, setDur] = useState(fmtDuration(entry.minutes));
   const s = data.services.find((x) => x.id === entry.service_id);
@@ -350,6 +371,7 @@ function EntryRow({
   const free = s?.billing_type === "non_billable";
   const cost = (entry.minutes / 60) * Number(entry.cost_rate_snapshot);
   const locked = isEntryLocked(entry);
+  const running = !!entry.timer_started_at;
 
   const commit = () => {
     const m = parseDuration(dur);
@@ -375,9 +397,25 @@ function EntryRow({
           {entry.note && <p className="mt-1 text-[12.5px] text-ink-2">{entry.note}</p>}
         </div>
 
+        {/* Đồng hồ chỉ bấm được cho hôm nay — ràng buộc của Productive. */}
+        {!locked && isToday && (
+          <button
+            type="button"
+            onClick={running ? onStopTimer : onStartTimer}
+            aria-label={running ? "Dừng đồng hồ" : "Bấm giờ"}
+            className={`mt-0.5 rounded-md p-1.5 ${
+              running
+                ? "bg-good-soft text-good"
+                : "text-ink-3 hover:bg-brand-soft hover:text-brand"
+            }`}
+          >
+            {running ? <Square size={13} /> : <Play size={13} />}
+          </button>
+        )}
+
         <Input
-          value={dur}
-          disabled={locked}
+          value={running ? fmtDuration(liveMinutes(entry)) : dur}
+          disabled={locked || running}
           onChange={(e) => setDur(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
