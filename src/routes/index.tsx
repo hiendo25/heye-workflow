@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/heye/Sidebar";
 import { TicketTable, type Row } from "@/components/heye/TicketTable";
 import { TicketDetail } from "@/components/heye/TicketDetail";
 import { buildTree, findNode, workspaceQuery, type TreeNode } from "@/lib/heye-data";
-import { deleteRow, financeQuery, insertRow, updateRow } from "@/lib/finance-data";
+import { deleteRow, financeQuery, insertRow, timerElapsed, updateRow } from "@/lib/finance-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -45,6 +45,52 @@ function Index() {
   });
   const delTime = useMutation({
     mutationFn: async (id: string) => deleteRow("time_entries", id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
+
+  // Bấm giờ ngay trên công việc. Mỗi người một đồng hồ nên phải dừng cái
+  // đang chạy trước khi bật cái mới.
+  const startTimer = useMutation({
+    mutationFn: async (id: string) => {
+      const me = data?.users?.[0];
+      const running = fin?.timeEntries.find((e) => e.user_id === me?.id && e.timer_started_at);
+      if (running?.timer_started_at) {
+        const mins = timerElapsed(running.timer_started_at);
+        await insertRow("timer_logs", {
+          time_entry_id: running.id,
+          started_at: running.timer_started_at,
+          stopped_at: new Date().toISOString(),
+          minutes: mins,
+        });
+        await updateRow("time_entries", running.id, {
+          minutes: running.minutes + mins,
+          billable_minutes: running.billable_minutes > 0 ? running.billable_minutes + mins : 0,
+          timer_started_at: null,
+        });
+      }
+      await updateRow("time_entries", id, { timer_started_at: new Date().toISOString() });
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
+
+  const stopTimer = useMutation({
+    mutationFn: async (id: string) => {
+      const e = fin?.timeEntries.find((x) => x.id === id);
+      if (!e?.timer_started_at) return;
+      const mins = timerElapsed(e.timer_started_at);
+      await insertRow("timer_logs", {
+        time_entry_id: e.id,
+        started_at: e.timer_started_at,
+        stopped_at: new Date().toISOString(),
+        minutes: mins,
+      });
+      const total = e.minutes + mins;
+      await updateRow("time_entries", e.id, {
+        minutes: total,
+        billable_minutes: e.billable_minutes > 0 ? total : 0,
+        timer_started_at: null,
+      });
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
   });
 
@@ -200,6 +246,8 @@ function Index() {
             nsId={data?.namespace?.id ?? ""}
             onLogTime={(v) => logTime.mutate(v)}
             onDeleteTime={(id) => delTime.mutate(id)}
+            onStartTimer={(id) => startTimer.mutate(id)}
+            onStopTimer={(id) => stopTimer.mutate(id)}
           />
         )}
     </AppShell>

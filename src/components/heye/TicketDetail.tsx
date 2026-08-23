@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ban, Clock, Coins, FileSignature, Folder, Plus, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { Ban, Clock, Coins, FileSignature, Folder, Play, Plus, Square, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,6 +53,8 @@ export function TicketDetail({
   onSetService,
   onLogTime,
   onDeleteTime,
+  onStartTimer,
+  onStopTimer,
   allUsers,
   nsId,
 }: {
@@ -67,6 +69,8 @@ export function TicketDetail({
   onSetService: (serviceId: string | null) => void;
   onLogTime: (v: Record<string, unknown>) => void;
   onDeleteTime: (id: string) => void;
+  onStartTimer: (entryId: string) => void;
+  onStopTimer: (entryId: string) => void;
   allUsers: User[];
   nsId: string;
 }) {
@@ -233,6 +237,23 @@ export function TicketDetail({
                           <span className="rounded bg-good-soft px-1.5 py-0.5 text-[10px] font-semibold text-good">
                             đã duyệt
                           </span>
+                        )}
+                        {/* Đồng hồ chỉ bấm cho hôm nay, giống Productive. */}
+                        {!locked && e.date === isoDate(new Date()) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              e.timer_started_at ? onStopTimer(e.id) : onStartTimer(e.id)
+                            }
+                            aria-label={e.timer_started_at ? "Dừng đồng hồ" : "Bấm giờ"}
+                            className={`rounded p-1 ${
+                              e.timer_started_at
+                                ? "bg-good-soft text-good"
+                                : "text-ink-3 hover:bg-brand-soft hover:text-brand"
+                            }`}
+                          >
+                            {e.timer_started_at ? <Square size={12} /> : <Play size={12} />}
+                          </button>
                         )}
                         <span className="num shrink-0 text-[12.5px] font-semibold">
                           {fmtDuration(e.minutes)}
