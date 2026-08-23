@@ -248,6 +248,16 @@ function buildSeries(
     const sv = svc.get(e.service_id);
     if (sv && sv.billing_type === "tm") b.rev += (e.billable_minutes / 60) * Number(sv.price);
   }
+
+  // Hạng mục TRỌN GÓI: doanh thu cố định theo hợp đồng, không theo giờ.
+  // Ghi nhận vào kỳ đầu tiên có hoạt động để đường tiền khớp với ô số liệu.
+  const firstKey = [...buckets.keys()].sort()[0];
+  if (firstKey) {
+    for (const sv of s.services) {
+      if (sv.billing_type !== "fixed") continue;
+      buckets.get(firstKey)!.rev += Number(sv.quantity) * Number(sv.price);
+    }
+  }
   for (const x of s.expenses) {
     const b = touch(keyOf(x.date));
     const sv = svc.get(x.service_id);

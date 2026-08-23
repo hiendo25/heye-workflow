@@ -1003,21 +1003,30 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
   const estimateQty = services.reduce((a, s) => a + Number(s.estimate ?? s.quantity), 0);
   const workedMin = entries.reduce((a, e) => a + e.minutes, 0);
   const billableMin = entries.reduce((a, e) => a + e.billable_minutes, 0);
-  const recognizedMin = entries.reduce((a, e) => a + recognized(e), 0);
+  const recognizedRawMin = entries.reduce((a, e) => a + recognized(e), 0);
 
-  // --- Doanh thu
+  // --- Doanh thu, tính trên GIỜ GHI NHẬN (recognized time)
+  //
+  // Recognized time BỊ CHẶN TRẦN theo số lượng đã bán. Tài liệu Productive:
+  // log 12 giờ trên hạng mục có ngân sách 10 giờ thì chỉ 10 giờ được ghi
+  // nhận, 2 giờ vượt KHÔNG ra doanh thu — làm không công.
+  //
   // Hạng mục trọn gói: doanh thu cố định theo hợp đồng, không theo giờ.
-  // Hạng mục theo giờ: doanh thu = giờ ghi nhận x đơn giá.
   let revenue = 0;
+  let cappedMin = 0;
   for (const s of services) {
     if (s.billing_type === "non_billable") continue;
     if (s.billing_type === "fixed") {
       revenue += Number(s.quantity) * Number(s.price);
       continue;
     }
-    const mins = entries
+    const raw = entries
       .filter((e) => e.service_id === s.id)
       .reduce((a, e) => a + recognized(e), 0);
+    // Chặn trần: không vượt số lượng đã bán
+    const capMin = Number(s.quantity) * 60;
+    const mins = Math.min(raw, capMin);
+    cappedMin += raw - mins;
     revenue += (mins / 60) * Number(s.price);
   }
 
@@ -1050,7 +1059,8 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
     estimateQty,
     workedMin,
     billableMin,
-    recognizedMin,
+    // Giờ thực sự ra doanh thu = giờ ghi nhận trừ phần vượt trần
+    recognizedMin: recognizedRawMin - cappedMin,
     // tiền
     contractTotal,
     usedBudget,
@@ -1062,7 +1072,9 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
     profit,
     margin: totalRevenue ? (profit / totalRevenue) * 100 : 0,
     // giờ làm không ra tiền — chỗ lợi nhuận rò rỉ
-    unbillableMin: workedMin - recognizedMin,
+    unbillableMin: workedMin - (recognizedRawMin - cappedMin),
+    // riêng phần vượt trần hợp đồng, đã làm nhưng quá số lượng đã bán
+    cappedMin,
   };
 }
 
