@@ -65,9 +65,9 @@ export const Route = createFileRoute("/tai-chinh")({
 // loại dịch vụ (danh mục) → khách hàng (chủ thể) → bảng giá (cần cả hai).
 // Người dùng lần đầu đi từ trên xuống là ra dữ liệu hợp lệ.
 const NAV = [
-  { id: "types", label: "Loại dịch vụ", icon: Layers, step: 1 },
-  { id: "clients", label: "Khách hàng", icon: Building2, step: 2 },
-  { id: "rates", label: "Bảng giá", icon: Tags, step: 3 },
+  { id: "types", label: "Loại dịch vụ", icon: Layers },
+  { id: "clients", label: "Khách hàng", icon: Building2 },
+  { id: "rates", label: "Bảng giá", icon: Tags },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -103,8 +103,7 @@ function TaiChinh() {
               }`}
             >
               <s.icon size={15} />
-              <span className="flex-1">{s.label}</span>
-              <span className="num text-[10.5px] text-ink-3">{s.step}</span>
+              {s.label}
             </button>
           ))}
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
