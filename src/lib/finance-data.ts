@@ -181,7 +181,7 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<Budget>("budgets", "created_at"),
       all<BudgetSection>("budget_sections", "position"),
       all<BudgetService>("budget_services", "position"),
-      all<CostRate>("cost_rates", "valid_from"),
+      all<CostRate>("cost_rates", "start_date"),
       all<BudgetCostRate>("budget_cost_rates"),
       all<OverheadSettings>("overhead_settings"),
     ]);
