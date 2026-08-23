@@ -5,7 +5,9 @@ import {
   Archive,
   ArchiveRestore,
   Building2,
+  Clock,
   Coins,
+  Users2,
   FileSignature,
   Layers,
   Pencil,
@@ -17,6 +19,8 @@ import { AppShell } from "@/components/heye/AppShell";
 import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
 import { BudgetDetail } from "@/components/heye/BudgetDetail";
 import { CostRatePanel } from "@/components/heye/CostRatePanel";
+import { MyTime } from "@/components/heye/MyTime";
+import { CompanyTime } from "@/components/heye/CompanyTime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,7 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { workspaceQuery, type User } from "@/lib/heye-data";
+import { workspaceQuery, type Ticket, type User } from "@/lib/heye-data";
 import {
   budgetTotal,
   deleteRow,
@@ -88,6 +92,8 @@ const NAV = [
   { id: "rates", label: "Bảng giá", icon: Tags },
   { id: "budgets", label: "Hợp đồng", icon: FileSignature },
   { id: "cost", label: "Giá vốn nhân sự", icon: Coins },
+  { id: "time", label: "Giờ của tôi", icon: Clock },
+  { id: "company", label: "Giờ toàn công ty", icon: Users2 },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -129,7 +135,7 @@ function TaiChinh() {
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
             Sắp có
           </div>
-          {["Giờ của tôi", "Chi phí"].map((s) => (
+          {["Chi phí"].map((s) => (
             <div key={s} className="px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60">
               {s}
             </div>
@@ -160,6 +166,20 @@ function TaiChinh() {
           <BudgetsPanel data={data} nsId={nsId} users={ws?.users ?? []} />
         ) : tab === "cost" ? (
           <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
+        ) : tab === "company" ? (
+          <CompanyPanel
+            data={data}
+            users={ws?.users ?? []}
+            tickets={ws?.tickets ?? []}
+            nsId={nsId}
+          />
+        ) : tab === "time" ? (
+          <TimePanel
+            data={data}
+            users={ws?.users ?? []}
+            tickets={ws?.tickets ?? []}
+            nsId={nsId}
+          />
         ) : (
           <RatesPanel data={data} nsId={nsId} clientId={clientId} setClientId={setClientId} />
         )}
@@ -1362,6 +1382,102 @@ function CostPanel({
             : insertRow("overhead_settings", v),
         )
       }
+    />
+  );
+}
+
+/* ================= Giờ của tôi ================= */
+
+function TimePanel({
+  data,
+  users,
+  tickets,
+  nsId,
+}: {
+  data: FinanceData;
+  users: User[];
+  tickets: Ticket[];
+  nsId: string;
+}) {
+  const save = useSave();
+  // "Giờ của tôi" chỉ hiện giờ của chính mình, giống Productive.
+  // Muốn xem hoặc ghi hộ người khác thì sang màn Giờ toàn công ty.
+  const currentUser = users[0] ?? null;
+
+  return (
+    <MyTime
+      data={data}
+      users={users}
+      tickets={tickets}
+      nsId={nsId}
+      currentUser={currentUser}
+      onSubmitWeek={(weekStart) =>
+        save.mutate(() =>
+          insertRow("timesheet_submissions", {
+            namespace_id: nsId,
+            user_id: currentUser!.id,
+            week_start: weekStart,
+            status: "submitted",
+          }),
+        )
+      }
+      onSave={(v) => save.mutate(() => insertRow("time_entries", v))}
+      onUpdate={(id, v) => save.mutate(() => updateRow("time_entries", id, v))}
+      onDelete={(id) => save.mutate(() => deleteRow("time_entries", id))}
+    />
+  );
+}
+
+/* ================= Giờ toàn công ty ================= */
+
+function CompanyPanel({
+  data,
+  users,
+  tickets,
+  nsId,
+}: {
+  data: FinanceData;
+  users: User[];
+  tickets: Ticket[];
+  nsId: string;
+}) {
+  const save = useSave();
+  const approver = users[0]?.id ?? null;
+
+  return (
+    <CompanyTime
+      data={data}
+      users={users}
+      tickets={tickets}
+      nsId={nsId}
+      onSave={(v) => save.mutate(() => insertRow("time_entries", v))}
+      onApprove={(ids) =>
+        save.mutate(async () => {
+          const now = new Date().toISOString();
+          for (const id of ids) {
+            await updateRow("time_entries", id, {
+              approved_at: now,
+              approved_by: approver,
+              change_requested_at: null,
+              change_request_note: null,
+            });
+          }
+        })
+      }
+      onUnapprove={(id) =>
+        save.mutate(() =>
+          updateRow("time_entries", id, { approved_at: null, approved_by: null }),
+        )
+      }
+      onRequestChange={(id, note) =>
+        save.mutate(() =>
+          updateRow("time_entries", id, {
+            change_requested_at: new Date().toISOString(),
+            change_request_note: note,
+          }),
+        )
+      }
+      onDelete={(id) => save.mutate(() => deleteRow("time_entries", id))}
     />
   );
 }

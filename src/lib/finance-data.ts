@@ -165,6 +165,8 @@ export type FinanceData = {
   budgetCostRates: BudgetCostRate[];
   overhead: OverheadSettings | null;
   timeEntries: TimeEntry[];
+  submissions: TimesheetSubmission[];
+  timeSettings: TimeSettings | null;
 };
 
 type Query = {
@@ -184,7 +186,7 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead, timeEntries,
+    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -197,10 +199,13 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<BudgetCostRate>("budget_cost_rates"),
       all<OverheadSettings>("overhead_settings"),
       all<TimeEntry>("time_entries", "date"),
+      all<TimesheetSubmission>("timesheet_submissions", "week_start"),
+      all<TimeSettings>("time_settings"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
+    submissions, timeSettings: timeSettings[0] ?? null,
   };
 }
 
@@ -515,23 +520,66 @@ export type TimeEntry = {
   cost_rate_snapshot: number;
   approved_at: string | null;
   approved_by: string | null;
+  change_requested_at: string | null;
+  change_request_note: string | null;
+  locked_at: string | null;
 };
 
 /**
- * Đọc số phút từ nhiều kiểu gõ, theo cách Productive chấp nhận:
- *   "8" hoặc "8h"     -> 480 phút
- *   "0.5" hoặc "30m"  -> 30 phút
- *   "1h30" / "1:30"   -> 90 phút
- *   "145m"            -> 145 phút
+ * Đọc số phút từ mọi kiểu gõ mà Productive chấp nhận.
+ *
+ *   Khoảng giờ:   "9-5" · "9 am-5 pm" · "9-17" · "9 to 5"
+ *   Khoảng mở:    "9-" · "9.30-"      (kết thúc = bây giờ)
+ *   Đồng hồ:      "2:30"
+ *   Chữ:          "1h 30m" · "1.5h" · "45m"
+ *   Thập phân:    "30" -> 30 phút · "1.5" -> 1h30
+ *
  * Số trần dưới 20 hiểu là giờ, từ 20 trở lên hiểu là phút — vì không ai
  * làm 45 giờ một ngày, nhưng 45 phút thì bình thường.
  */
-export function parseDuration(input: string): number {
+export function parseDuration(input: string, now = new Date()): number {
   const s = input.trim().toLowerCase().replace(/,/g, ".");
   if (!s) return 0;
 
-  const hm = s.match(/^(\d+)\s*[h:]\s*(\d+)m?$/);
+  // Một mốc giờ: "9" · "9.30" · "9:30" · "9 am" · "5pm"
+  const clock = (raw: string): number | null => {
+    const m = raw.trim().match(/^(\d{1,2})(?:[.:h](\d{1,2}))?\s*(am|pm)?$/);
+    if (!m) return null;
+    let h = Number(m[1]);
+    const min = m[2] ? Number(m[2]) : 0;
+    const ap = m[3];
+    if (h > 23 || min > 59) return null;
+    if (ap === "pm" && h < 12) h += 12;
+    if (ap === "am" && h === 12) h = 0;
+    return h * 60 + min;
+  };
+
+  // Khoảng giờ, kể cả khoảng mở "9-"
+  const range = s.match(/^(.+?)\s*(?:-|–|to|đến)\s*(.*)$/);
+  if (range) {
+    const from = clock(range[1] ?? "");
+    if (from !== null) {
+      const rest = (range[2] ?? "").trim();
+      let to = rest ? clock(rest) : now.getHours() * 60 + now.getMinutes();
+      if (to !== null) {
+        // "9-5" nghĩa là 9 sáng tới 5 chiều, không phải 5 giờ sáng hôm sau.
+        // Chỉ suy diễn khi người dùng gõ giờ trần (không có am/pm) và cả hai
+        // mốc đều <= 12 — ca đêm thật thì gõ "22-2" hoặc "9pm-5am".
+        const bare = !/am|pm/.test(rest);
+        if (bare && to < from && to <= 12 * 60 && from <= 12 * 60) to += 12 * 60;
+        // Qua nửa đêm thì cộng thêm một ngày.
+        return to >= from ? to - from : to + 24 * 60 - from;
+      }
+    }
+  }
+
+  // "1h 30m" / "1h30"
+  const hm = s.match(/^(\d+)\s*h\s*(\d{1,2})\s*m?$/);
   if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+
+  // "2:30" — đồng hồ hiểu là thời lượng
+  const colon = s.match(/^(\d+):(\d{1,2})$/);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
 
   const h = s.match(/^(\d+(?:\.\d+)?)\s*(h|hour|hours|giờ|gio)$/);
   if (h) return Math.round(Number(h[1]) * 60);
@@ -594,4 +642,103 @@ export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),
   ).padStart(2, "0")}`;
+}
+
+/* ================= Nộp bảng chấm công & khoá kỳ ================= */
+
+export type TimesheetSubmission = {
+  id: string;
+  namespace_id: string;
+  user_id: string;
+  week_start: string;
+  status: "submitted" | "partial" | "changes_requested";
+  submitted_at: string;
+  submitted_by: string | null;
+  note: string | null;
+};
+
+export type TimeSettings = {
+  id: string;
+  namespace_id: string;
+  require_approval: boolean;
+  require_submission: boolean;
+  lock_period: "none" | "daily" | "weekly" | "monthly";
+  max_hours_per_day: number;
+};
+
+/**
+ * Vì sao KHÔNG log giờ được vào một hạng mục.
+ * Danh sách theo đúng bài "Can't Track Time Against a Budget" của Productive.
+ * Trả về câu giải thích, hoặc null nếu log được.
+ */
+export function whyCannotTrack(
+  data: Pick<FinanceData, "budgets" | "services" | "costRates" | "budgetCostRates" | "overhead">,
+  serviceId: string,
+  userId: string,
+  date: string,
+): string | null {
+  const s = data.services.find((x) => x.id === serviceId);
+  if (!s) return "Hạng mục không tồn tại.";
+
+  const b = data.budgets.find((x) => x.id === s.budget_id);
+  if (!b) return "Hạng mục không thuộc hợp đồng nào.";
+
+  if (b.status === "delivered")
+    return `Hợp đồng "${b.name}" đã bàn giao nên khoá, không log thêm giờ được. Mở lại hợp đồng nếu cần.`;
+
+  if (b.start_date && date < b.start_date)
+    return `Ngày ${fmtVn(date)} nằm trước ngày bắt đầu hợp đồng (${fmtVn(b.start_date)}).`;
+
+  if (b.end_date && date > b.end_date)
+    return `Ngày ${fmtVn(date)} nằm sau ngày kết thúc hợp đồng (${fmtVn(b.end_date)}).`;
+
+  if (!s.allow_time)
+    return `Hạng mục "${s.name}" đã tắt ghi nhận giờ. Bật lại trong phần sửa hạng mục.`;
+
+  const rate = costRateFor(data, userId, { onDate: date });
+  if (rate.source === "none")
+    return "Người này chưa có giá vốn tại ngày đó. Chưa biết giá vốn thì giờ log ra chi phí bằng 0.";
+
+  return null;
+}
+
+function fmtVn(d: string): string {
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
+/** Thứ Hai của tuần chứa ngày đã cho. */
+export function weekStartOf(d: Date | string): string {
+  const x = typeof d === "string" ? new Date(d) : new Date(d);
+  const back = x.getDay() === 0 ? 6 : x.getDay() - 1;
+  x.setDate(x.getDate() - back);
+  return isoDate(x);
+}
+
+/**
+ * Trạng thái nộp bảng chấm công của một tuần.
+ * Productive yêu cầu có dòng cho ĐỦ 7 ngày mới tính là đã nộp đầy đủ —
+ * kể cả cuối tuần, để phân biệt "nghỉ" với "quên log".
+ */
+export function weekSubmission(
+  subs: TimesheetSubmission[],
+  entries: TimeEntry[],
+  userId: string,
+  weekStart: string,
+): { status: "none" | "partial" | "submitted" | "changes_requested"; daysLogged: number } {
+  const days = new Set(
+    entries
+      .filter((e) => e.user_id === userId && weekStartOf(e.date) === weekStart)
+      .map((e) => e.date),
+  );
+  const sub = subs.find((s) => s.user_id === userId && s.week_start === weekStart);
+  if (!sub) return { status: "none", daysLogged: days.size };
+  if (sub.status === "changes_requested")
+    return { status: "changes_requested", daysLogged: days.size };
+  return { status: days.size >= 7 ? "submitted" : "partial", daysLogged: days.size };
+}
+
+/** Dòng giờ có bị khoá không — đã duyệt hoặc hết kỳ khoá. */
+export function isEntryLocked(e: TimeEntry): boolean {
+  return !!e.approved_at || !!e.locked_at;
 }
