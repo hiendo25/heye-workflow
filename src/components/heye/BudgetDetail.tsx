@@ -9,6 +9,7 @@ import {
   Plus,
   Settings2,
   Tag,
+  Users2,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,10 @@ import {
   type BillingType,
   type BudgetService,
   type FinanceData,
+  costRateFor,
+  effectivePrice,
 } from "@/lib/finance-data";
+import type { User } from "@/lib/heye-data";
 
 /** Cột hiện được, bật/tắt qua nút "Cột" giống Fields của Productive. */
 const COLUMNS = [
@@ -89,9 +93,13 @@ export function BudgetDetail({
   onEditSection,
   onDeleteSection,
   onEditBudget,
+  users,
+  onSaveBudgetCostRate,
+  onRemoveBudgetCostRate,
 }: {
   budget: Budget;
   data: FinanceData;
+  users: User[];
   onBack: () => void;
   onAddService: (v: Record<string, unknown>) => void;
   onEditService: (id: string, v: Record<string, unknown>) => void;
@@ -100,10 +108,13 @@ export function BudgetDetail({
   onEditSection: (id: string, name: string) => void;
   onDeleteSection: (id: string) => void;
   onEditBudget: (v: Record<string, unknown>) => void;
+  onSaveBudgetCostRate: (userId: string, rate: number) => void;
+  onRemoveBudgetCostRate: (id: string) => void;
 }) {
   const [adding, setAdding] = useState<string | null | "root">(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBudget, setEditBudget] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
@@ -177,6 +188,9 @@ export function BudgetDetail({
           <DropdownMenuContent align="end" className="min-w-[200px]">
             <DropdownMenuItem onSelect={() => setEditBudget(true)}>
               <Pencil size={14} /> Sửa hợp đồng
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setCostOpen(true)}>
+              <Users2 size={14} /> Giá vốn riêng hợp đồng
             </DropdownMenuItem>
             <DropdownMenuItem disabled>
               <Copy size={14} /> Nhân bản
@@ -357,6 +371,17 @@ export function BudgetDetail({
           onEditService(editingId!, v);
           setEditingId(null);
         }}
+      />
+
+      <BudgetCostRatesDialog
+        key={costOpen ? "bcr" : "closed-bcr"}
+        open={costOpen}
+        budget={budget}
+        data={data}
+        users={users}
+        onClose={() => setCostOpen(false)}
+        onSave={onSaveBudgetCostRate}
+        onRemove={onRemoveBudgetCostRate}
       />
 
       <EditBudgetDialog
@@ -601,17 +626,19 @@ function ServiceDialog({
   const items = data.rateCardItems.filter((i) => i.rate_card_id === cardId);
   const item = items.find((i) => i.id === itemId);
   const st = item ? data.serviceTypes.find((s) => s.id === item.service_type_id) : null;
-  const total = item && qty ? Number(qty) * item.price : 0;
+  const unitPrice = item ? effectivePrice(item) : 0;
+  const total = item && qty ? Number(qty) * unitPrice : 0;
 
+  // Rút sẵn mọi cấu hình đã khai trên bảng giá — đỡ phải khai lại từng hợp đồng.
   const pick = (id: string) => {
     setItemId(id);
     const it = data.rateCardItems.find((i) => i.id === id);
-    const t = it ? data.serviceTypes.find((s) => s.id === it.service_type_id) : null;
-    if (t && !name) setName(t.name);
-    if (it?.unit === "piece") {
-      setBilling("fixed");
-      setAllowExpense(true);
-    }
+    if (!it) return;
+    const t = data.serviceTypes.find((s) => s.id === it.service_type_id);
+    if (t && !name) setName(it.description?.trim() || t.name);
+    setBilling(it.billing_type ?? (it.unit === "piece" ? "fixed" : "tm"));
+    setAllowTime(it.allow_time ?? true);
+    setAllowExpense(it.allow_expense ?? it.unit === "piece");
   };
 
   return (
@@ -656,7 +683,7 @@ function ServiceDialog({
                     const t = data.serviceTypes.find((s) => s.id === i.service_type_id);
                     return (
                       <SelectItem key={i.id} value={i.id}>
-                        {t?.name} — {money(i.price)}/{UNIT_LABEL[i.unit]}
+                        {t?.name} — {money(Math.round(effectivePrice(i)))}/{UNIT_LABEL[i.unit]}
                       </SelectItem>
                     );
                   })}
@@ -729,7 +756,7 @@ function ServiceDialog({
           {item && qty && (
             <div className="flex items-baseline justify-between rounded-lg bg-brand-soft px-3 py-2">
               <span className="text-[12.5px] text-ink-2">
-                {qty} {UNIT_LABEL[item.unit]} × {money(item.price)}
+                {qty} {UNIT_LABEL[item.unit]} × {money(Math.round(unitPrice))}
               </span>
               <span className="num text-[15px] font-bold text-brand">
                 {billing === "non_billable" ? "0" : money(total)}
@@ -753,7 +780,7 @@ function ServiceDialog({
                 billing_type: billing,
                 unit: item!.unit,
                 quantity: Number(qty),
-                price: item!.price,
+                price: Math.round(unitPrice),
                 estimate: billing === "tm" ? Number(qty) : estimate ? Number(estimate) : null,
                 allow_time: allowTime,
                 allow_expense: allowExpense,
@@ -1037,3 +1064,151 @@ function fmtDate(d: string | null): string {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 }
+
+/* -------- Giá vốn riêng cho hợp đồng này -------- */
+
+function BudgetCostRatesDialog({
+  open,
+  budget,
+  data,
+  users,
+  onClose,
+  onSave,
+  onRemove,
+}: {
+  open: boolean;
+  budget: Budget;
+  data: FinanceData;
+  users: User[];
+  onClose: () => void;
+  onSave: (userId: string, rate: number) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [rate, setRate] = useState("");
+
+  const rows = data.budgetCostRates.filter((r) => r.budget_id === budget.id);
+  const used = new Set(rows.map((r) => r.user_id));
+  const options = users.filter((u) => !used.has(u.id));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>Giá vốn riêng cho hợp đồng này</DialogTitle>
+          <DialogDescription>
+            Đè lên giá vốn mặc định của từng người, chỉ trong hợp đồng này. Dùng khi cùng một
+            cộng tác viên tính giá khác nhau giữa các dự án.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {rows.length === 0 && !adding && (
+            <p className="rounded-lg border border-line bg-surface-2 px-3 py-4 text-center text-[12.5px] text-ink-3">
+              Chưa đặt giá riêng. Mọi người đang dùng giá vốn mặc định của mình.
+            </p>
+          )}
+
+          {rows.length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-line">
+              {rows.map((r) => {
+                const u = users.find((x) => x.id === r.user_id);
+                const def = costRateFor(data, r.user_id);
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-3 border-b border-line px-3 py-2 last:border-0"
+                  >
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                      style={{ background: u?.avatar_color }}
+                    >
+                      {u?.initial}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-medium">{u?.full_name ?? "—"}</div>
+                      <div className="text-[11px] text-ink-3">
+                        mặc định {money(Math.round(def.total))} đ/giờ
+                      </div>
+                    </div>
+                    <span className="num text-[13.5px] font-semibold">{money(r.rate)}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(r.id)}
+                      className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                      aria-label="Bỏ giá riêng"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {adding ? (
+            <div className="flex items-end gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+              <L label="Người">
+                <Select value={userId} onValueChange={setUserId}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Chọn người" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </L>
+              <L label="Giá vốn mỗi giờ">
+                <Input
+                  className="num w-32"
+                  inputMode="numeric"
+                  value={rate}
+                  placeholder="200000"
+                  onChange={(e) => setRate(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              </L>
+              <Button
+                size="sm"
+                disabled={!userId || !rate}
+                onClick={() => {
+                  onSave(userId, Number(rate));
+                  setUserId("");
+                  setRate("");
+                  setAdding(false);
+                }}
+              >
+                Thêm
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+                Huỷ
+              </Button>
+            </div>
+          ) : (
+            options.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+                <Plus size={13} /> Thêm người
+              </Button>
+            )
+          )}
+
+          <p className="text-[11.5px] text-ink-3">
+            Bỏ giá riêng thì chi phí của những giờ đã log trong hợp đồng này sẽ được tính lại
+            theo giá vốn mặc định.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Đóng
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

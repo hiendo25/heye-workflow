@@ -52,6 +52,14 @@ export type RateCardItem = {
   unit: "hour" | "day" | "piece";
   price: number;
   position: number;
+  description: string | null;
+  billing_type: BillingType;
+  /** Giảm giá / phụ giá theo %. Âm = giảm, dương = cộng thêm. */
+  markup_pct: number;
+  /** Giá vốn dự kiến một đơn vị — để ước lãi ngay lúc báo giá. */
+  cost_estimate: number | null;
+  allow_time: boolean;
+  allow_expense: boolean;
 };
 
 export type BillingType = "tm" | "fixed" | "non_billable";
@@ -231,6 +239,19 @@ export function money(n: number): string {
  */
 export function rateCardsForClient(cards: RateCard[], clientId: string | null): RateCard[] {
   return cards.filter((c) => !c.is_archived && (c.client_id === null || c.client_id === clientId));
+}
+
+/** Đơn giá sau khi áp giảm giá / phụ giá. */
+export function effectivePrice(i: Pick<RateCardItem, "price" | "markup_pct">): number {
+  return Number(i.price) * (1 + Number(i.markup_pct ?? 0) / 100);
+}
+
+/** Biên lãi dự kiến của một dòng giá, nếu đã khai giá vốn dự kiến. */
+export function estimatedMargin(i: RateCardItem): number | null {
+  if (i.cost_estimate == null || !Number(i.cost_estimate)) return null;
+  const p = effectivePrice(i);
+  if (!p) return null;
+  return Math.round(((p - Number(i.cost_estimate)) / p) * 100);
 }
 
 /** So sánh giá riêng của khách với giá chuẩn — trả về % chênh lệch. */

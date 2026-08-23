@@ -52,8 +52,12 @@ import {
   insertRow,
   money,
   priceDelta,
+  effectivePrice,
+  estimatedMargin,
   updateRow,
   UNIT_LABEL,
+  BILLING_LABEL,
+  type BillingType,
   type Budget,
   type ClientCompany,
   type FinanceData,
@@ -153,7 +157,7 @@ function TaiChinh() {
         ) : tab === "types" ? (
           <TypesPanel data={data} nsId={nsId} />
         ) : tab === "budgets" ? (
-          <BudgetsPanel data={data} nsId={nsId} />
+          <BudgetsPanel data={data} nsId={nsId} users={ws?.users ?? []} />
         ) : tab === "cost" ? (
           <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : (
@@ -563,8 +567,18 @@ function RatesPanel({
                       meta={
                         <span className="flex items-center gap-4">
                           <span className="text-ink-3">{UNIT_LABEL[it.unit]}</span>
+                          {estimatedMargin(it) !== null && (
+                            <span
+                              className={`num text-[11.5px] ${
+                                (estimatedMargin(it) ?? 0) >= 40 ? "text-good" : "text-warn"
+                              }`}
+                              title="Biên lãi dự kiến"
+                            >
+                              lãi {estimatedMargin(it)}%
+                            </span>
+                          )}
                           <span className="num w-24 text-right font-semibold text-ink">
-                            {money(it.price)}
+                            {money(Math.round(effectivePrice(it)))}
                           </span>
                           <span className="num w-12 text-right">
                             {d === null ? (
@@ -597,6 +611,14 @@ function RatesPanel({
                         style={{ background: st?.color }}
                       />
                       {st?.name ?? "—"}
+                      {it.billing_type && it.billing_type !== "tm" && (
+                        <span className="ml-2 rounded bg-line px-1.5 py-0.5 text-[10.5px] text-ink-3">
+                          {BILLING_LABEL[it.billing_type]}
+                        </span>
+                      )}
+                      {it.description && (
+                        <div className="text-[11.5px] text-ink-3">{it.description}</div>
+                      )}
                     </PanelRow>
                   );
                 })
@@ -742,6 +764,14 @@ function RateLineDialog({
   const [typeId, setTypeId] = useState(existing?.service_type_id ?? "");
   const [unit, setUnit] = useState(existing?.unit ?? "hour");
   const [price, setPrice] = useState(existing ? String(existing.price) : "");
+  const [desc, setDesc] = useState(existing?.description ?? "");
+  const [billing, setBilling] = useState<BillingType>(existing?.billing_type ?? "tm");
+  const [markup, setMarkup] = useState(existing ? String(existing.markup_pct ?? 0) : "0");
+  const [costEst, setCostEst] = useState(
+    existing?.cost_estimate ? String(existing.cost_estimate) : "",
+  );
+  const [allowTime, setAllowTime] = useState(existing?.allow_time ?? true);
+  const [allowExp, setAllowExp] = useState(existing?.allow_expense ?? false);
 
   const used = new Set(
     data.rateCardItems
@@ -800,11 +830,94 @@ function RateLineDialog({
               />
             </Field>
           </div>
+          <Field label="Mô tả">
+            <Input
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Hiện kèm hạng mục khi báo giá cho khách"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Cách tính tiền mặc định">
+              <Select value={billing} onValueChange={(v) => setBilling(v as BillingType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(BILLING_LABEL) as BillingType[]).map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {BILLING_LABEL[b]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Giảm giá / phụ giá (%)">
+              <Input
+                className="num"
+                inputMode="numeric"
+                value={markup}
+                placeholder="0"
+                onChange={(e) => setMarkup(e.target.value.replace(/[^\d-]/g, ""))}
+              />
+            </Field>
+          </div>
+
+          <Field label="Giá vốn dự kiến mỗi đơn vị">
+            <Input
+              className="num"
+              inputMode="numeric"
+              value={costEst}
+              placeholder="Mua vào / thuê ngoài bao nhiêu"
+              onChange={(e) => setCostEst(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </Field>
+
+          <div className="flex gap-4 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px]">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allowTime}
+                onChange={(e) => setAllowTime(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--brand)]"
+              />
+              Cho log giờ
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allowExp}
+                onChange={(e) => setAllowExp(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--brand)]"
+              />
+              Cho ghi chi phí
+            </label>
+          </div>
+
           {price && (
-            <p className="text-[12px] text-ink-3">
-              = <span className="num font-semibold text-ink-2">{money(Number(price))}</span> đ /{" "}
-              {UNIT_LABEL[unit]}
-            </p>
+            <div className="rounded-lg bg-brand-soft px-3 py-2 text-[12.5px]">
+              <div className="flex justify-between text-ink-2">
+                <span>Đơn giá bán</span>
+                <span className="num">
+                  {money(Math.round(Number(price) * (1 + Number(markup || 0) / 100)))} đ /{" "}
+                  {UNIT_LABEL[unit]}
+                </span>
+              </div>
+              {costEst && Number(costEst) > 0 && (
+                <div className="mt-0.5 flex justify-between font-semibold">
+                  <span>Biên lãi dự kiến</span>
+                  <span className="num text-brand">
+                    {Math.round(
+                      ((Number(price) * (1 + Number(markup || 0) / 100) - Number(costEst)) /
+                        (Number(price) * (1 + Number(markup || 0) / 100))) *
+                        100,
+                    )}
+                    %
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
         <DialogFooter>
@@ -814,7 +927,17 @@ function RateLineDialog({
           <Button
             disabled={!typeId || !price}
             onClick={() =>
-              onSubmit({ service_type_id: typeId, unit, price: Number(price) })
+              onSubmit({
+                service_type_id: typeId,
+                unit,
+                price: Number(price),
+                description: desc.trim() || null,
+                billing_type: billing,
+                markup_pct: Number(markup || 0),
+                cost_estimate: costEst ? Number(costEst) : null,
+                allow_time: allowTime,
+                allow_expense: allowExp,
+              })
             }
           >
             Lưu
@@ -979,7 +1102,15 @@ function FilterChip({
 
 /* ================= Hợp đồng ================= */
 
-function BudgetsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
+function BudgetsPanel({
+  data,
+  nsId,
+  users,
+}: {
+  data: FinanceData;
+  nsId: string;
+  users: User[];
+}) {
   const save = useSave();
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -992,6 +1123,7 @@ function BudgetsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
       <BudgetDetail
         budget={current}
         data={data}
+        users={users}
         onBack={() => setOpenId(null)}
         onAddService={(v) => save.mutate(() => insertRow("budget_services", v))}
         onEditService={(id, v) => save.mutate(() => updateRow("budget_services", id, v))}
@@ -999,6 +1131,12 @@ function BudgetsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         onEditSection={(id, name) => save.mutate(() => updateRow("budget_sections", id, { name }))}
         onDeleteSection={(id) => save.mutate(() => deleteRow("budget_sections", id))}
         onEditBudget={(v) => save.mutate(() => updateRow("budgets", current.id, v))}
+        onSaveBudgetCostRate={(userId, rate) =>
+          save.mutate(() =>
+            insertRow("budget_cost_rates", { budget_id: current.id, user_id: userId, rate }),
+          )
+        }
+        onRemoveBudgetCostRate={(id) => save.mutate(() => deleteRow("budget_cost_rates", id))}
         onAddSection={(name) =>
           save.mutate(() =>
             insertRow("budget_sections", {
