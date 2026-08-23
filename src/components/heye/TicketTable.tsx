@@ -59,8 +59,8 @@ export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[
         </thead>
         <tbody>
           {groupsWithRows.map(({ status, items }) => (
-            <>
-              <tr key={status.id} className="border-b border-line bg-background/60">
+            <Fragment key={status.id}>
+              <tr className="border-b border-line bg-background/60">
                 <td colSpan={4} className="px-3 py-1.5">
                   <span className="inline-flex items-center gap-2">
                     <span
@@ -114,7 +114,7 @@ export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[
                   </td>
                 </tr>
               ))}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>
