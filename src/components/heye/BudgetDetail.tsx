@@ -1,11 +1,24 @@
 import { useState } from "react";
-import { ArrowLeft, Clock, FileText, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  Copy,
+  Lock,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Settings2,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -33,14 +46,37 @@ import {
   UNIT_LABEL,
   type Budget,
   type BillingType,
+  type BudgetService,
   type FinanceData,
 } from "@/lib/finance-data";
+
+/** Cột hiện được, bật/tắt qua nút "Cột" giống Fields của Productive. */
+const COLUMNS = [
+  { key: "desc", label: "Cách tính" },
+  { key: "track", label: "Theo dõi" },
+  { key: "estimate", label: "Ước tính" },
+  { key: "quantity", label: "Số lượng" },
+  { key: "price", label: "Đơn giá" },
+  { key: "total", label: "Thành tiền" },
+] as const;
+type ColKey = (typeof COLUMNS)[number]["key"];
 
 const BILL_STYLE: Record<BillingType, string> = {
   tm: "bg-good-soft text-good",
   fixed: "bg-warn-soft text-warn",
   non_billable: "bg-line text-ink-3",
 };
+
+/** Icon đầu hàng cho biết hạng mục thuộc loại nào — đọc được ngay không cần đọc chữ. */
+function RowIcon({ s }: { s: BudgetService }) {
+  if (s.billing_type === "non_billable")
+    return <Ban size={13} className="text-ink-3" aria-label="Không tính tiền" />;
+  if (s.unit === "piece")
+    return <Tag size={13} className="text-warn" aria-label="Bán theo gói" />;
+  if (s.billing_type === "fixed")
+    return <Lock size={13} className="text-warn" aria-label="Trọn gói" />;
+  return <span className="inline-block h-2 w-2 rounded-full bg-good" aria-label="Theo giờ" />;
+}
 
 export function BudgetDetail({
   budget,
@@ -68,14 +104,34 @@ export function BudgetDetail({
   const [adding, setAdding] = useState<string | null | "root">(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBudget, setEditBudget] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
-  const [sectionName, setSectionName] = useState("");
+  const [cols, setCols] = useState<Set<ColKey>>(
+    new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
+  );
 
   const client = data.clients.find((c) => c.id === budget.client_id);
   const services = data.services.filter((s) => s.budget_id === budget.id);
   const sections = data.sections.filter((s) => s.budget_id === budget.id);
-  const total = budgetTotal(services);
   const loose = services.filter((s) => !s.section_id);
+  const total = budgetTotal(services);
+  const totalQty = services.reduce((a, s) => a + Number(s.quantity), 0);
+
+  const on = (k: ColKey) => cols.has(k);
+  const toggle = (k: ColKey) =>
+    setCols((c) => {
+      const n = new Set(c);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+
+  const commitRename = (id: string) => {
+    const v = draft.trim();
+    if (v) onEditSection(id, v);
+    setRenaming(null);
+  };
 
   return (
     <>
@@ -87,6 +143,7 @@ export function BudgetDetail({
         <ArrowLeft size={14} /> Tất cả hợp đồng
       </button>
 
+      {/* ---- Đầu trang ---- */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-[11.5px] text-ink-3">{client?.name}</div>
@@ -94,9 +151,7 @@ export function BudgetDetail({
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                budget.status === "open"
-                  ? "bg-good-soft text-good"
-                  : "bg-line text-ink-3"
+                budget.status === "open" ? "bg-good-soft text-good" : "bg-line text-ink-3"
               }`}
             >
               <span
@@ -114,87 +169,172 @@ export function BudgetDetail({
             )}
           </div>
         </div>
-        <div className="flex items-start gap-2">
-          <div className="text-right">
-            <div className="text-[11px] uppercase tracking-wider text-ink-3">Tổng hợp đồng</div>
-            <div className="num text-[22px] font-bold tracking-tight">{money(total)}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEditBudget(true)}
-            className="mt-1 rounded-md p-1.5 text-ink-3 hover:bg-brand-soft hover:text-brand"
-            aria-label="Sửa hợp đồng"
-          >
-            <Pencil size={15} />
-          </button>
-        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="rounded-md border border-line bg-surface p-1.5 text-ink-2 hover:border-brand hover:text-brand">
+            <MoreHorizontal size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[200px]">
+            <DropdownMenuItem onSelect={() => setEditBudget(true)}>
+              <Pencil size={14} /> Sửa hợp đồng
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              <Copy size={14} /> Nhân bản
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="mt-5 space-y-5">
-        {sections.map((sec) => (
-          <SectionBlock
-            key={sec.id}
-            title={sec.name}
-            rows={services.filter((s) => s.section_id === sec.id)}
-            data={data}
-            onAdd={() => setAdding(sec.id)}
-            onEdit={setEditingId}
-            onDelete={onDeleteService}
-            onRename={(name) => onEditSection(sec.id, name)}
-            onRemove={() => onDeleteSection(sec.id)}
-          />
-        ))}
+      {/* ---- Thanh công cụ ---- */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] text-ink-2 hover:border-brand hover:text-brand">
+            <Settings2 size={13} /> Cột <span className="num text-ink-3">{cols.size}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[170px]">
+            {COLUMNS.map((c) => (
+              <DropdownMenuCheckboxItem
+                key={c.key}
+                checked={on(c.key)}
+                onCheckedChange={() => toggle(c.key)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {c.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {(loose.length > 0 || sections.length === 0) && (
-          <SectionBlock
-            title={sections.length === 0 ? "Hạng mục bán" : "Chưa phân nhóm"}
-            rows={loose}
-            data={data}
-            onAdd={() => setAdding("root")}
-            onEdit={setEditingId}
-            onDelete={onDeleteService}
-          />
-        )}
+        <Button size="sm" variant="outline" onClick={() => setNewSection(true)}>
+          <Plus size={13} /> Nhóm hạng mục
+        </Button>
+
+        <div className="flex-1" />
+        <Button size="sm" onClick={() => setAdding(sections[0]?.id ?? "root")}>
+          <Plus size={13} /> Thêm hạng mục
+        </Button>
       </div>
 
-      <div className="mt-4 flex gap-2">
-        {newSection ? (
-          <div className="flex gap-2">
-            <Input
-              autoFocus
-              value={sectionName}
-              placeholder="Tên nhóm: Giai đoạn 1, Mở tài khoản…"
-              className="h-8 w-64"
-              onChange={(e) => setSectionName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && sectionName.trim()) {
-                  onAddSection(sectionName.trim());
-                  setSectionName("");
-                  setNewSection(false);
-                }
-                if (e.key === "Escape") setNewSection(false);
-              }}
-            />
-            <Button
-              size="sm"
-              disabled={!sectionName.trim()}
-              onClick={() => {
-                onAddSection(sectionName.trim());
-                setSectionName("");
+      {newSection && (
+        <div className="mt-2 flex gap-2">
+          <Input
+            autoFocus
+            value={draft}
+            placeholder="Tên nhóm: Định danh eKYC, Giao dịch tiền mặt…"
+            className="h-8 w-72"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && draft.trim()) {
+                onAddSection(draft.trim());
+                setDraft("");
                 setNewSection(false);
-              }}
-            >
-              Thêm
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setNewSection(false)}>
-              Huỷ
-            </Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => setNewSection(true)}>
-            <Plus size={13} /> Thêm nhóm hạng mục
+              }
+              if (e.key === "Escape") setNewSection(false);
+            }}
+          />
+          <Button
+            size="sm"
+            disabled={!draft.trim()}
+            onClick={() => {
+              onAddSection(draft.trim());
+              setDraft("");
+              setNewSection(false);
+            }}
+          >
+            Thêm
           </Button>
-        )}
+          <Button size="sm" variant="ghost" onClick={() => setNewSection(false)}>
+            Huỷ
+          </Button>
+        </div>
+      )}
+
+      {/* ---- Bảng gộp: tổng nằm trên header, section là hàng trong bảng ---- */}
+      <div className="mt-3 overflow-hidden rounded-xl border border-line bg-surface">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-[13px]">
+            <thead>
+              <tr className="align-bottom">
+                <Th className="w-[30%] text-left">
+                  Nhóm / Hạng mục
+                  <div className="mt-0.5 text-[10.5px] font-normal normal-case text-ink-3">
+                    {services.length} hạng mục
+                  </div>
+                </Th>
+                {on("desc") && <Th className="text-left">Cách tính</Th>}
+                {on("track") && <Th className="text-center">Theo dõi</Th>}
+                {on("estimate") && <Th className="text-right">Ước tính</Th>}
+                {on("quantity") && (
+                  <Th className="text-right">
+                    Số lượng
+                    <div className="num mt-0.5 text-[12px] font-bold normal-case text-ink">
+                      {totalQty}
+                    </div>
+                  </Th>
+                )}
+                {on("price") && <Th className="text-right">Đơn giá</Th>}
+                {on("total") && (
+                  <Th className="text-right">
+                    Thành tiền
+                    <div className="num mt-0.5 text-[13px] font-bold normal-case text-ink">
+                      {money(total)}
+                    </div>
+                  </Th>
+                )}
+                <Th className="w-10" />
+              </tr>
+            </thead>
+
+            <tbody>
+              {services.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-[12.5px] text-ink-3">
+                    Hợp đồng chưa có hạng mục nào. Bấm “Thêm hạng mục” để rút giá từ bảng giá
+                    của khách.
+                  </td>
+                </tr>
+              )}
+
+              {sections.map((sec) => {
+                const rows = services.filter((s) => s.section_id === sec.id);
+                return (
+                  <SectionRows
+                    key={sec.id}
+                    name={sec.name}
+                    rows={rows}
+                    data={data}
+                    cols={cols}
+                    renaming={renaming === sec.id}
+                    draft={draft}
+                    setDraft={setDraft}
+                    onStartRename={() => {
+                      setDraft(sec.name);
+                      setRenaming(sec.id);
+                    }}
+                    onCommitRename={() => commitRename(sec.id)}
+                    onCancelRename={() => setRenaming(null)}
+                    onRemoveSection={() => onDeleteSection(sec.id)}
+                    onAdd={() => setAdding(sec.id)}
+                    onEdit={setEditingId}
+                    onDelete={onDeleteService}
+                  />
+                );
+              })}
+
+              {loose.length > 0 && (
+                <SectionRows
+                  name={sections.length ? "Chưa phân nhóm" : "Hạng mục bán"}
+                  rows={loose}
+                  data={data}
+                  cols={cols}
+                  onAdd={() => setAdding("root")}
+                  onEdit={setEditingId}
+                  onDelete={onDeleteService}
+                />
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <ServiceDialog
@@ -233,180 +373,200 @@ export function BudgetDetail({
   );
 }
 
-function SectionBlock({
-  title,
+/* -------- Một nhóm: hàng tiêu đề + các hàng hạng mục, cùng một bảng -------- */
+
+function SectionRows({
+  name,
   rows,
   data,
+  cols,
+  renaming,
+  draft,
+  setDraft,
+  onStartRename,
+  onCommitRename,
+  onCancelRename,
+  onRemoveSection,
   onAdd,
   onEdit,
   onDelete,
-  onRename,
-  onRemove,
 }: {
-  title: string;
-  rows: FinanceData["services"];
+  name: string;
+  rows: BudgetService[];
   data: FinanceData;
+  cols: Set<ColKey>;
+  renaming?: boolean;
+  draft?: string;
+  setDraft?: (v: string) => void;
+  onStartRename?: () => void;
+  onCommitRename?: () => void;
+  onCancelRename?: () => void;
+  onRemoveSection?: () => void;
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  onRename?: (name: string) => void;
-  onRemove?: () => void;
 }) {
+  const on = (k: ColKey) => cols.has(k);
   const sum = budgetTotal(rows);
-  const [renaming, setRenaming] = useState(false);
-  const [draft, setDraft] = useState(title);
-
-  const commit = () => {
-    const v = draft.trim();
-    if (v && v !== title) onRename?.(v);
-    setRenaming(false);
-  };
+  const qty = rows.reduce((a, s) => a + Number(s.quantity), 0);
+  const span = 2 + [...cols].length;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface">
-      <header className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-2">
-        {renaming ? (
-          <Input
-            autoFocus
-            value={draft}
-            className="h-7 w-64"
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") {
-                setDraft(title);
-                setRenaming(false);
-              }
-            }}
-          />
-        ) : (
-          <span className="text-[13.5px] font-bold">{title}</span>
+    <>
+      <tr className="bg-surface-2">
+        <td className="px-4 py-2">
+          {renaming ? (
+            <Input
+              autoFocus
+              value={draft ?? ""}
+              className="h-7 w-64"
+              onChange={(e) => setDraft?.(e.target.value)}
+              onBlur={onCommitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onCommitRename?.();
+                if (e.key === "Escape") onCancelRename?.();
+              }}
+            />
+          ) : (
+            <span className="text-[13px] font-bold">{name}</span>
+          )}
+        </td>
+        {on("desc") && <td />}
+        {on("track") && <td />}
+        {on("estimate") && <td />}
+        {on("quantity") && <td className="num px-3 py-2 text-right font-semibold">{qty}</td>}
+        {on("price") && <td />}
+        {on("total") && (
+          <td className="num px-3 py-2 text-right font-semibold">{money(sum)}</td>
         )}
-        <div className="flex-1" />
-        <span className="num text-[13px] font-semibold">{money(sum)}</span>
-        {onRename && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="rounded-md p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
-              aria-label="Tuỳ chọn nhóm"
-            >
-              <MoreHorizontal size={15} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[190px]">
-              <DropdownMenuItem onSelect={() => { setDraft(title); setRenaming(true); }}>
-                <Pencil size={14} /> Đổi tên nhóm
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => onRemove?.()}
-                className="text-bad focus:text-bad"
+        <td className="px-2 py-2 text-right">
+          {onStartRename && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                aria-label="Tuỳ chọn nhóm"
               >
-                <Trash2 size={14} /> Xoá nhóm
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </header>
+                <MoreHorizontal size={15} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem onSelect={onAdd}>
+                  <Plus size={14} /> Thêm hạng mục
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onStartRename}>
+                  <Pencil size={14} /> Đổi tên nhóm
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => onRemoveSection?.()}
+                  className="text-bad focus:text-bad"
+                >
+                  <Trash2 size={14} /> Xoá nhóm
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </td>
+      </tr>
 
-      {rows.length === 0 ? (
-        <div className="px-4 py-4 text-[12.5px] text-ink-3">Nhóm này chưa có hạng mục nào.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] border-collapse text-[13px]">
-            <thead>
-              <tr className="text-[11px] uppercase tracking-wider text-ink-3">
-                <th className="border-b border-line px-3 py-2 text-left font-bold">Hạng mục</th>
-                <th className="border-b border-line px-3 py-2 text-left font-bold">Cách tính</th>
-                <th className="border-b border-line px-3 py-2 text-center font-bold">Theo dõi</th>
-                <th className="border-b border-line px-3 py-2 text-right font-bold">Ước tính</th>
-                <th className="border-b border-line px-3 py-2 text-right font-bold">Số lượng</th>
-                <th className="border-b border-line px-3 py-2 text-right font-bold">Đơn giá</th>
-                <th className="border-b border-line px-3 py-2 text-right font-bold">Thành tiền</th>
-                <th className="border-b border-line px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s) => {
-                const st = data.serviceTypes.find((t) => t.id === s.service_type_id);
-                return (
-                  <tr
-                    key={s.id}
-                    onDoubleClick={() => onEdit(s.id)}
-                    className="cursor-default border-b border-line last:border-0 hover:bg-brand-soft/25"
-                  >
-                    <td className="px-3 py-2">
-                      <span
-                        className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
-                        style={{ background: st?.color }}
-                      />
-                      <span className="font-medium text-ink">{s.name}</span>
-                      <div className="ml-4 text-[11.5px] text-ink-3">{st?.name}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${BILL_STYLE[s.billing_type]}`}
-                      >
-                        {BILLING_LABEL[s.billing_type]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-center text-ink-3">
-                      <span className="inline-flex gap-1.5">
-                        {s.allow_time && <Clock size={13} className="text-good" />}
-                        {s.allow_expense && <FileText size={13} className="text-warn" />}
-                      </span>
-                    </td>
-                    <td className="num px-3 py-2 text-right text-ink-2">
-                      {s.estimate ? `${s.estimate} ${UNIT_LABEL[s.unit]}` : "—"}
-                    </td>
-                    <td className="num px-3 py-2 text-right">
-                      {s.quantity} {UNIT_LABEL[s.unit]}
-                    </td>
-                    <td className="num px-3 py-2 text-right">{money(s.price)}</td>
-                    <td className="num px-3 py-2 text-right font-semibold">
-                      {s.billing_type === "non_billable" ? (
-                        <span className="text-ink-3">0</span>
-                      ) : (
-                        money(serviceTotal(s))
-                      )}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex justify-end gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(s.id)}
-                          className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
-                          aria-label="Sửa hạng mục"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(s.id)}
-                          className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
-                          aria-label="Xoá hạng mục"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {rows.map((s) => {
+        const st = data.serviceTypes.find((t) => t.id === s.service_type_id);
+        return (
+          <tr
+            key={s.id}
+            onDoubleClick={() => onEdit(s.id)}
+            className="border-b border-line last:border-0 hover:bg-brand-soft/25"
+          >
+            <td className="px-4 py-2">
+              <div className="flex items-start gap-2">
+                <span className="mt-1 shrink-0">
+                  <RowIcon s={s} />
+                </span>
+                <div className="min-w-0">
+                  <div className="font-medium text-ink">{s.name}</div>
+                  <div className="text-[11.5px] text-ink-3">{st?.name}</div>
+                </div>
+              </div>
+            </td>
+            {on("desc") && (
+              <td className="px-3 py-2">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${BILL_STYLE[s.billing_type]}`}
+                >
+                  {BILLING_LABEL[s.billing_type]}
+                </span>
+              </td>
+            )}
+            {on("track") && (
+              <td className="px-3 py-2 text-center text-[11px] text-ink-3">
+                {[s.allow_time && "giờ", s.allow_expense && "chi phí"].filter(Boolean).join(" · ") ||
+                  "—"}
+              </td>
+            )}
+            {on("estimate") && (
+              <td className="num px-3 py-2 text-right text-ink-2">
+                {s.estimate ? `${s.estimate}` : "—"}
+              </td>
+            )}
+            {on("quantity") && (
+              <td className="num px-3 py-2 text-right">
+                {s.quantity} {UNIT_LABEL[s.unit]}
+              </td>
+            )}
+            {on("price") && <td className="num px-3 py-2 text-right">{money(s.price)}</td>}
+            {on("total") && (
+              <td className="num px-3 py-2 text-right font-semibold">
+                {s.billing_type === "non_billable" ? (
+                  <span className="text-ink-3">0</span>
+                ) : (
+                  money(serviceTotal(s))
+                )}
+              </td>
+            )}
+            <td className="px-2 py-2">
+              <div className="flex justify-end gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => onEdit(s.id)}
+                  className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                  aria-label="Sửa hạng mục"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(s.id)}
+                  className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                  aria-label="Xoá hạng mục"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+
+      {rows.length === 0 && (
+        <tr>
+          <td colSpan={span} className="px-4 py-3 text-[12.5px] text-ink-3">
+            Nhóm này chưa có hạng mục.{" "}
+            <button type="button" onClick={onAdd} className="font-medium text-brand hover:underline">
+              Thêm hạng mục
+            </button>
+          </td>
+        </tr>
       )}
+    </>
+  );
+}
 
-      <div className="px-4 py-2.5">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="text-[12.5px] font-medium text-brand hover:underline"
-        >
-          + Thêm hạng mục từ bảng giá
-        </button>
-      </div>
-    </section>
+function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
+  return (
+    <th
+      className={`border-b border-line px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-3 ${className}`}
+    >
+      {children}
+    </th>
   );
 }
 
@@ -448,7 +608,6 @@ function ServiceDialog({
     const it = data.rateCardItems.find((i) => i.id === id);
     const t = it ? data.serviceTypes.find((s) => s.id === it.service_type_id) : null;
     if (t && !name) setName(t.name);
-    // Đơn vị 'gói' thường là license/hạ tầng: mặc định trọn gói, bật ghi chi phí.
     if (it?.unit === "piece") {
       setBilling("fixed");
       setAllowExpense(true);
