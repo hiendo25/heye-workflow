@@ -973,3 +973,115 @@ export function whyCannotExpense(
 
   return null;
 }
+
+/* ================= Tổng quan hợp đồng ================= */
+
+/**
+ * Số liệu của một hợp đồng, tách làm hai góc nhìn như Productive.
+ *
+ * Điểm cốt lõi — BẤT ĐỐI XỨNG CỐ Ý:
+ *   Doanh thu tính trên giờ TÍNH TIỀN (billable)
+ *   Chi phí   tính trên giờ ĐÃ LÀM   (worked)
+ *
+ * Làm 131 giờ nhưng chỉ 84 giờ tính được tiền thì vẫn tốn lương đủ 131 giờ.
+ * Đây chính là cơ chế khiến làm quá tay ăn vào lợi nhuận. Đừng "sửa" cho đều.
+ */
+export function budgetSummary(data: FinanceData, budgetId: string) {
+  const budget = data.budgets.find((b) => b.id === budgetId);
+  const services = data.services.filter((s) => s.budget_id === budgetId);
+  const svcIds = new Set(services.map((s) => s.id));
+  const entries = data.timeEntries.filter((e) => svcIds.has(e.service_id));
+  const expenses = data.expenses.filter((e) => svcIds.has(e.service_id));
+
+  const requireApproval = data.timeSettings?.require_approval ?? true;
+  /** Chỉ giờ đã duyệt mới ra doanh thu — nếu tổ chức bật duyệt giờ. */
+  const recognized = (e: TimeEntry) =>
+    requireApproval && !e.approved_at ? 0 : e.billable_minutes;
+
+  // --- Thời gian
+  const soldQty = services.reduce((a, s) => a + Number(s.quantity), 0);
+  const estimateQty = services.reduce((a, s) => a + Number(s.estimate ?? s.quantity), 0);
+  const workedMin = entries.reduce((a, e) => a + e.minutes, 0);
+  const billableMin = entries.reduce((a, e) => a + e.billable_minutes, 0);
+  const recognizedMin = entries.reduce((a, e) => a + recognized(e), 0);
+
+  // --- Doanh thu
+  // Hạng mục trọn gói: doanh thu cố định theo hợp đồng, không theo giờ.
+  // Hạng mục theo giờ: doanh thu = giờ ghi nhận x đơn giá.
+  let revenue = 0;
+  for (const s of services) {
+    if (s.billing_type === "non_billable") continue;
+    if (s.billing_type === "fixed") {
+      revenue += Number(s.quantity) * Number(s.price);
+      continue;
+    }
+    const mins = entries
+      .filter((e) => e.service_id === s.id)
+      .reduce((a, e) => a + recognized(e), 0);
+    revenue += (mins / 60) * Number(s.price);
+  }
+
+  // --- Chi phí: lương theo giờ ĐÃ LÀM + chi phí phát sinh
+  const laborCost = entries.reduce((a, e) => a + (e.minutes / 60) * Number(e.cost_rate_snapshot), 0);
+  let expenseCost = 0;
+  let expenseRevenue = 0;
+  for (const e of expenses) {
+    const s = services.find((x) => x.id === e.service_id);
+    const im = expenseImpact(e, data.expenseItems, s);
+    expenseCost += im.cost;
+    expenseRevenue += im.revenue;
+  }
+
+  const totalRevenue = revenue + expenseRevenue;
+  const totalCost = laborCost + expenseCost;
+  const profit = totalRevenue - totalCost;
+
+  // --- Ngân sách (góc nhìn đối ngoại): đã tiêu bao nhiêu trong tổng đã bán
+  const contractTotal = budgetTotal(services);
+  const usedBudget = totalRevenue;
+
+  return {
+    budget,
+    services,
+    entries,
+    expenses,
+    // thời gian
+    soldQty,
+    estimateQty,
+    workedMin,
+    billableMin,
+    recognizedMin,
+    // tiền
+    contractTotal,
+    usedBudget,
+    remainingBudget: contractTotal - usedBudget,
+    revenue: totalRevenue,
+    laborCost,
+    expenseCost,
+    cost: totalCost,
+    profit,
+    margin: totalRevenue ? (profit / totalRevenue) * 100 : 0,
+    // giờ làm không ra tiền — chỗ lợi nhuận rò rỉ
+    unbillableMin: workedMin - recognizedMin,
+  };
+}
+
+/** Gộp số liệu nhiều hợp đồng — dùng cho màn tổng của cả công ty. */
+export function totalsAcross(data: FinanceData, budgetIds: string[]) {
+  let revenue = 0;
+  let cost = 0;
+  let contract = 0;
+  for (const id of budgetIds) {
+    const s = budgetSummary(data, id);
+    revenue += s.revenue;
+    cost += s.cost;
+    contract += s.contractTotal;
+  }
+  return {
+    revenue,
+    cost,
+    profit: revenue - cost,
+    contract,
+    margin: revenue ? ((revenue - cost) / revenue) * 100 : 0,
+  };
+}

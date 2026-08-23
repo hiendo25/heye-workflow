@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BudgetOverview } from "@/components/heye/BudgetOverview";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -118,6 +119,7 @@ export function BudgetDetail({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
+  const [view, setView] = useState<"overview" | "services">("overview");
   const [cols, setCols] = useState<Set<ColKey>>(
     new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
   );
@@ -199,6 +201,32 @@ export function BudgetDetail({
         </DropdownMenu>
       </div>
 
+      {/* ---- Tab con: Tổng quan / Hạng mục ---- */}
+      <div className="mt-4 flex gap-1 border-b border-line">
+        {(["overview", "services"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-[13px] ${
+              view === v
+                ? "border-brand font-semibold text-brand"
+                : "border-transparent text-ink-2 hover:text-ink"
+            }`}
+          >
+            {v === "overview" ? "Tổng quan" : "Hạng mục bán"}
+          </button>
+        ))}
+      </div>
+
+      {view === "overview" && (
+        <div className="mt-4">
+          <BudgetOverview data={data} budgetId={budget.id} />
+        </div>
+      )}
+
+      {view === "services" && (
+      <>
       {/* ---- Thanh công cụ ---- */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <DropdownMenu>
@@ -350,6 +378,9 @@ export function BudgetDetail({
           </table>
         </div>
       </div>
+
+      </>
+      )}
 
       <ServiceDialog
         key={adding ?? "closed"}
