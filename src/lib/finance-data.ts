@@ -310,6 +310,25 @@ export const updateRow = (table: string, id: string, values: Record<string, unkn
 export const deleteRow = (table: string, id: string) =>
   run(db().from(table).delete().eq("id", id));
 
+/** Thêm bản ghi và lấy lại id — cần khi phải chèn tiếp bảng con. */
+export async function insertReturning(
+  table: string,
+  values: Record<string, unknown>,
+): Promise<{ id: string } | null> {
+  const client = supabase as unknown as {
+    from: (t: string) => {
+      insert: (v: unknown) => {
+        select: (s: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data, error } = await client.from(table).insert(values).select("id").single();
+  if (error) throw error;
+  return (data as { id: string } | null) ?? null;
+}
+
 /* ================= Giá vốn nhân sự ================= */
 
 export const RATE_TYPE_LABEL: Record<RateType, string> = {

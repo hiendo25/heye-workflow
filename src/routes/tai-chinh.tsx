@@ -7,6 +7,7 @@ import {
   Building2,
   Clock,
   Coins,
+  Receipt,
   Users2,
   FileSignature,
   Layers,
@@ -21,6 +22,7 @@ import { BudgetDetail } from "@/components/heye/BudgetDetail";
 import { CostRatePanel } from "@/components/heye/CostRatePanel";
 import { MyTime } from "@/components/heye/MyTime";
 import { CompanyTime } from "@/components/heye/CompanyTime";
+import { Expenses } from "@/components/heye/Expenses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -54,6 +56,7 @@ import {
   deleteRow,
   financeQuery,
   insertRow,
+  insertReturning,
   money,
   priceDelta,
   effectivePrice,
@@ -95,6 +98,7 @@ const NAV = [
   { id: "cost", label: "Giá vốn nhân sự", icon: Coins },
   { id: "time", label: "Giờ của tôi", icon: Clock },
   { id: "company", label: "Giờ toàn công ty", icon: Users2 },
+  { id: "expenses", label: "Chi phí", icon: Receipt },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -133,14 +137,7 @@ function TaiChinh() {
               {s.label}
             </button>
           ))}
-          <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
-            Sắp có
-          </div>
-          {["Chi phí"].map((s) => (
-            <div key={s} className="px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60">
-              {s}
-            </div>
-          ))}
+
         </div>
       </aside>
 
@@ -167,6 +164,8 @@ function TaiChinh() {
           <BudgetsPanel data={data} nsId={nsId} users={ws?.users ?? []} />
         ) : tab === "cost" ? (
           <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
+        ) : tab === "expenses" ? (
+          <ExpensePanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : tab === "company" ? (
           <CompanyPanel
             data={data}
@@ -1542,6 +1541,50 @@ function CompanyPanel({
         )
       }
       onDelete={(id) => save.mutate(() => deleteRow("time_entries", id))}
+    />
+  );
+}
+
+/* ================= Chi phí ================= */
+
+function ExpensePanel({
+  data,
+  users,
+  nsId,
+}: {
+  data: FinanceData;
+  users: User[];
+  nsId: string;
+}) {
+  const save = useSave();
+  const approver = users[0]?.id ?? null;
+
+  return (
+    <Expenses
+      data={data}
+      users={users}
+      nsId={nsId}
+      onCreate={(expense, items) =>
+        save.mutate(async () => {
+          const created = await insertReturning("expenses", expense);
+          if (!created) return;
+          for (const it of items) {
+            await insertRow("expense_items", { ...it, expense_id: created.id });
+          }
+        })
+      }
+      onUpdate={(id, v) => save.mutate(() => updateRow("expenses", id, v))}
+      onDelete={(id) => save.mutate(() => deleteRow("expenses", id))}
+      onSetStatus={(id, status, note) =>
+        save.mutate(() =>
+          updateRow("expenses", id, {
+            status,
+            review_note: note ?? null,
+            approved_at: status === "approved" ? new Date().toISOString() : null,
+            approved_by: status === "approved" ? approver : null,
+          }),
+        )
+      }
     />
   );
 }
