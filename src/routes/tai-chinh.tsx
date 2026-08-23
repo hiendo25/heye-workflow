@@ -5,6 +5,7 @@ import {
   Archive,
   ArchiveRestore,
   Building2,
+  Coins,
   FileSignature,
   Layers,
   Pencil,
@@ -15,6 +16,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/heye/AppShell";
 import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
 import { BudgetDetail } from "@/components/heye/BudgetDetail";
+import { CostRatePanel } from "@/components/heye/CostRatePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { workspaceQuery } from "@/lib/heye-data";
+import { workspaceQuery, type User } from "@/lib/heye-data";
 import {
   budgetTotal,
   deleteRow,
@@ -81,6 +83,7 @@ const NAV = [
   { id: "clients", label: "Khách hàng", icon: Building2 },
   { id: "rates", label: "Bảng giá", icon: Tags },
   { id: "budgets", label: "Hợp đồng", icon: FileSignature },
+  { id: "cost", label: "Giá vốn nhân sự", icon: Coins },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -122,7 +125,7 @@ function TaiChinh() {
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
             Sắp có
           </div>
-          {["Giờ của tôi", "Chi phí", "Giá vốn nhân sự"].map((s) => (
+          {["Giờ của tôi", "Chi phí"].map((s) => (
             <div key={s} className="px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60">
               {s}
             </div>
@@ -151,6 +154,8 @@ function TaiChinh() {
           <TypesPanel data={data} nsId={nsId} />
         ) : tab === "budgets" ? (
           <BudgetsPanel data={data} nsId={nsId} />
+        ) : tab === "cost" ? (
+          <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : (
           <RatesPanel data={data} nsId={nsId} clientId={clientId} setClientId={setClientId} />
         )}
@@ -1188,5 +1193,36 @@ function BudgetDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ================= Giá vốn nhân sự ================= */
+
+function CostPanel({
+  data,
+  users,
+  nsId,
+}: {
+  data: FinanceData;
+  users: User[];
+  nsId: string;
+}) {
+  const save = useSave();
+
+  return (
+    <CostRatePanel
+      data={data}
+      users={users}
+      nsId={nsId}
+      onSaveRate={(v) => save.mutate(() => insertRow("cost_rates", v))}
+      onDeleteRate={(id) => save.mutate(() => deleteRow("cost_rates", id))}
+      onSaveOverhead={(v) =>
+        save.mutate(() =>
+          data.overhead
+            ? updateRow("overhead_settings", data.overhead.id, v)
+            : insertRow("overhead_settings", v),
+        )
+      }
+    />
   );
 }

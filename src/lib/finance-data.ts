@@ -95,6 +95,33 @@ export type BudgetService = {
   position: number;
 };
 
+export type CostRate = {
+  id: string;
+  namespace_id: string;
+  user_id: string;
+  rate: number;
+  valid_from: string;
+  add_overhead: boolean;
+  note: string | null;
+};
+
+export type BudgetCostRate = {
+  id: string;
+  budget_id: string;
+  user_id: string;
+  rate: number;
+  note: string | null;
+};
+
+export type OverheadSettings = {
+  id: string;
+  namespace_id: string;
+  monthly_cost: number;
+  monthly_hours: number;
+  is_enabled: boolean;
+  note: string | null;
+};
+
 export type FinanceData = {
   clients: ClientCompany[];
   serviceTypes: ServiceType[];
@@ -103,6 +130,9 @@ export type FinanceData = {
   budgets: Budget[];
   sections: BudgetSection[];
   services: BudgetService[];
+  costRates: CostRate[];
+  budgetCostRates: BudgetCostRate[];
+  overhead: OverheadSettings | null;
 };
 
 type Query = {
@@ -120,8 +150,10 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 }
 
 export async function fetchFinance(): Promise<FinanceData> {
-  const [clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services] =
-    await Promise.all([
+  const [
+    clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
+    costRates, budgetCostRates, overhead,
+  ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
       all<RateCard>("rate_cards", "name"),
@@ -129,8 +161,14 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<Budget>("budgets", "created_at"),
       all<BudgetSection>("budget_sections", "position"),
       all<BudgetService>("budget_services", "position"),
+      all<CostRate>("cost_rates", "valid_from"),
+      all<BudgetCostRate>("budget_cost_rates"),
+      all<OverheadSettings>("overhead_settings"),
     ]);
-  return { clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services };
+  return {
+    clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
+    costRates, budgetCostRates, overhead: overhead[0] ?? null,
+  };
 }
 
 export const financeQuery = {
@@ -213,3 +251,76 @@ export const updateRow = (table: string, id: string, values: Record<string, unkn
 
 export const deleteRow = (table: string, id: string) =>
   run(db().from(table).delete().eq("id", id));
+
+/* ================= Giá vốn nhân sự ================= */
+
+/**
+ * Chi phí gián tiếp phân bổ lên mỗi giờ làm việc.
+ *
+ *   Overhead/giờ = chi phí gián tiếp tháng / tổng giờ làm việc tháng
+ *
+ * Gồm mặt bằng, điện nước, máy móc, HR, kế toán, quản lý — những thứ
+ * không gắn vào dự án nào nhưng vẫn phải trả. Bỏ qua thì biên lợi nhuận
+ * luôn đẹp giả tạo.
+ */
+export function overheadPerHour(o: OverheadSettings | null): number {
+  if (!o || !o.is_enabled || !o.monthly_hours) return 0;
+  return o.monthly_cost / o.monthly_hours;
+}
+
+/**
+ * Giá vốn 1 giờ của một người, theo thứ tự ưu tiên:
+ *
+ *   1. Giá riêng của hợp đồng   (nếu đang tính trong 1 hợp đồng cụ thể)
+ *   2. Giá mặc định của người   (bản có hiệu lực gần nhất tính tới ngày cần)
+ *
+ * Overhead chỉ cộng khi người đó bật `add_overhead`.
+ */
+export function costRateFor(
+  data: Pick<FinanceData, "costRates" | "budgetCostRates" | "overhead">,
+  userId: string,
+  opts?: { budgetId?: string; onDate?: string },
+): { base: number; overhead: number; total: number; source: "budget" | "default" | "none" } {
+  const oh = overheadPerHour(data.overhead);
+
+  if (opts?.budgetId) {
+    const custom = data.budgetCostRates.find(
+      (r) => r.budget_id === opts.budgetId && r.user_id === userId,
+    );
+    if (custom) {
+      // Giá riêng theo hợp đồng vẫn cộng overhead nếu người đó bật.
+      const def = latestRate(data.costRates, userId, opts.onDate);
+      const add = def?.add_overhead ? oh : 0;
+      return { base: custom.rate, overhead: add, total: custom.rate + add, source: "budget" };
+    }
+  }
+
+  const def = latestRate(data.costRates, userId, opts?.onDate);
+  if (!def) return { base: 0, overhead: 0, total: 0, source: "none" };
+  const add = def.add_overhead ? oh : 0;
+  return { base: def.rate, overhead: add, total: def.rate + add, source: "default" };
+}
+
+/**
+ * Bản giá vốn có hiệu lực tại một ngày.
+ * Tăng lương thì tạo bản mới với valid_from mới — chi phí của những giờ
+ * đã log trước đó vẫn tính theo bản cũ, số liệu lịch sử không đổi.
+ */
+export function latestRate(
+  rates: CostRate[],
+  userId: string,
+  onDate?: string,
+): CostRate | null {
+  const day = onDate ?? new Date().toISOString().slice(0, 10);
+  const mine = rates
+    .filter((r) => r.user_id === userId && r.valid_from <= day)
+    .sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+  return mine[0] ?? null;
+}
+
+/** Toàn bộ lịch sử giá vốn của một người, mới nhất trước. */
+export function rateHistory(rates: CostRate[], userId: string): CostRate[] {
+  return rates
+    .filter((r) => r.user_id === userId)
+    .sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+}
