@@ -1425,6 +1425,24 @@ function TimePanel({
       onSave={(v) => save.mutate(() => insertRow("time_entries", v))}
       onUpdate={(id, v) => save.mutate(() => updateRow("time_entries", id, v))}
       onDelete={(id) => save.mutate(() => deleteRow("time_entries", id))}
+      onCopyYesterday={(rows) =>
+        save.mutate(async () => {
+          const today = new Date().toISOString().slice(0, 10);
+          for (const r of rows) {
+            await insertRow("time_entries", {
+              namespace_id: nsId,
+              user_id: r.user_id,
+              service_id: r.service_id,
+              ticket_id: r.ticket_id,
+              date: today,
+              minutes: r.minutes,
+              billable_minutes: r.billable_minutes,
+              note: r.note,
+              cost_rate_snapshot: r.cost_rate_snapshot,
+            });
+          }
+        })
+      }
       onStartTimer={(id) =>
         save.mutate(async () => {
           // Mỗi người chỉ một đồng hồ: dừng cái đang chạy trước khi bật cái mới.

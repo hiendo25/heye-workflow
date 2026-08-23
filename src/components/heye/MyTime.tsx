@@ -7,6 +7,8 @@ import {
   Clock,
   LayoutList,
   Pin,
+  Copy as CopyIcon,
+  History,
   Play,
   Plus,
   Square,
@@ -65,6 +67,7 @@ export function MyTime({
   onDelete,
   onStartTimer,
   onStopTimer,
+  onCopyYesterday,
 }: {
   data: FinanceData;
   users: User[];
@@ -77,10 +80,29 @@ export function MyTime({
   onDelete: (id: string) => void;
   onStartTimer: (entryId: string) => void;
   onStopTimer: (entryId: string) => void;
+  onCopyYesterday: (rows: TimeEntry[]) => void;
 }) {
   const [view, setView] = useState<View>("day");
   const [cursor, setCursor] = useState(new Date());
   const [adding, setAdding] = useState<{ date: string; serviceId?: string | undefined } | null>(null);
+  // Hạng mục đã ghim — giữ ở máy người dùng, không cần bảng riêng.
+  const [pinned, setPinned] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("heye.pinnedServices") ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const togglePin = (id: string) =>
+    setPinned((p) => {
+      const next = p.includes(id) ? p.filter((x) => x !== id) : [...p, id];
+      try {
+        localStorage.setItem("heye.pinnedServices", JSON.stringify(next));
+      } catch {
+        /* trình duyệt chặn lưu thì bỏ qua */
+      }
+      return next;
+    });
 
   const days = weekDays(cursor);
   const today = isoDate(cursor);
@@ -213,6 +235,10 @@ export function MyTime({
           onUpdate={onUpdate}
           onStartTimer={onStartTimer}
           onStopTimer={onStopTimer}
+          allEntries={mine}
+          onCopyYesterday={onCopyYesterday}
+          pinned={pinned}
+          onTogglePin={togglePin}
         />
       )}
 
@@ -249,6 +275,10 @@ function DayView({
   onUpdate,
   onStartTimer,
   onStopTimer,
+  allEntries,
+  onCopyYesterday,
+  pinned,
+  onTogglePin,
 }: {
   data: FinanceData;
   tickets: Ticket[];
@@ -259,13 +289,30 @@ function DayView({
   onUpdate: (id: string, v: Record<string, unknown>) => void;
   onStartTimer: (entryId: string) => void;
   onStopTimer: (entryId: string) => void;
+  allEntries: TimeEntry[];
+  onCopyYesterday: (rows: TimeEntry[]) => void;
+  pinned: string[];
+  onTogglePin: (serviceId: string) => void;
 }) {
+  // Giờ của hôm qua — để chép sang hôm nay cho việc lặp lại hằng ngày.
+  const yesterday = useMemo(() => {
+    const y = new Date(date);
+    y.setDate(y.getDate() - 1);
+    const iso = isoDate(y);
+    return allEntries.filter((e) => e.date === iso);
+  }, [allEntries, date]);
+
+  const pinnedServices = useMemo(
+    () => pinned.map((id) => data.services.find((s) => s.id === id)).filter(Boolean) as BudgetService[],
+    [pinned, data.services],
+  );
+
   // Gợi ý: hạng mục vừa dùng gần đây, để bấm một phát là ra dòng mới.
   const recent = useMemo(() => {
     const seen = new Set<string>();
     const out: BudgetService[] = [];
     for (const e of [...data.timeEntries].reverse()) {
-      if (seen.has(e.service_id)) continue;
+      if (seen.has(e.service_id) || pinned.includes(e.service_id)) continue;
       const s = data.services.find((x) => x.id === e.service_id);
       if (s) {
         out.push(s);
@@ -274,7 +321,7 @@ function DayView({
       if (out.length >= 5) break;
     }
     return out;
-  }, [data.timeEntries, data.services]);
+  }, [data.timeEntries, data.services, pinned]);
 
   return (
     <div className="mt-4 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -284,34 +331,35 @@ function DayView({
           <Plus size={14} /> Ghi nhận giờ
         </Button>
 
+        {/* Chép lại giờ hôm qua — chỉ hiện khi hôm qua có log và hôm nay chưa. */}
+        {yesterday.length > 0 && entries.length === 0 && (
+          <Button variant="outline" className="w-full" onClick={() => onCopyYesterday(yesterday)}>
+            <CopyIcon size={13} /> Chép {yesterday.length} dòng của hôm qua
+          </Button>
+        )}
+
+        {pinnedServices.length > 0 && (
+          <SuggestBox
+            title="Đã ghim"
+            icon={<Pin size={11} />}
+            items={pinnedServices}
+            data={data}
+            pinned={pinned}
+            onPick={onAdd}
+            onTogglePin={onTogglePin}
+          />
+        )}
+
         {recent.length > 0 && (
-          <section className="overflow-hidden rounded-xl border border-line bg-surface">
-            <header className="flex items-center gap-1.5 border-b border-line px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">
-              <Pin size={11} /> Vừa dùng gần đây
-            </header>
-            {recent.map((s) => {
-              const t = data.serviceTypes.find((x) => x.id === s.service_type_id);
-              const b = data.budgets.find((x) => x.id === s.budget_id);
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => onAdd(s.id)}
-                  className="flex w-full items-start gap-2 border-b border-line px-3 py-2 text-left last:border-0 hover:bg-brand-soft/40"
-                >
-                  <span
-                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ background: t?.color }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium">{s.name}</span>
-                    <span className="block truncate text-[11px] text-ink-3">{b?.name}</span>
-                  </span>
-                  <Plus size={12} className="mt-1 shrink-0 text-ink-3" />
-                </button>
-              );
-            })}
-          </section>
+          <SuggestBox
+            title="Vừa dùng gần đây"
+            icon={<History size={11} />}
+            items={recent}
+            data={data}
+            pinned={pinned}
+            onPick={onAdd}
+            onTogglePin={onTogglePin}
+          />
         )}
       </aside>
 
@@ -934,5 +982,68 @@ function SubmitBar({
         </Button>
       )}
     </div>
+  );
+}
+
+/** Một nhóm gợi ý trong panel trái: Đã ghim / Vừa dùng gần đây. */
+function SuggestBox({
+  title,
+  icon,
+  items,
+  data,
+  pinned,
+  onPick,
+  onTogglePin,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: BudgetService[];
+  data: FinanceData;
+  pinned: string[];
+  onPick: (serviceId: string) => void;
+  onTogglePin: (serviceId: string) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-line bg-surface">
+      <header className="flex items-center gap-1.5 border-b border-line px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">
+        {icon} {title}
+      </header>
+      {items.map((s) => {
+        const t = data.serviceTypes.find((x) => x.id === s.service_type_id);
+        const b = data.budgets.find((x) => x.id === s.budget_id);
+        const isPinned = pinned.includes(s.id);
+        return (
+          <div
+            key={s.id}
+            className="group flex items-start gap-2 border-b border-line px-3 py-2 last:border-0 hover:bg-brand-soft/40"
+          >
+            <span
+              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: t?.color }}
+            />
+            <button
+              type="button"
+              onClick={() => onPick(s.id)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <span className="block truncate text-[12.5px] font-medium">{s.name}</span>
+              <span className="block truncate text-[11px] text-ink-3">{b?.name}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onTogglePin(s.id)}
+              aria-label={isPinned ? "Bỏ ghim" : "Ghim hạng mục"}
+              className={`mt-0.5 shrink-0 rounded p-1 ${
+                isPinned
+                  ? "text-brand"
+                  : "text-ink-3 opacity-0 group-hover:opacity-100 hover:text-brand"
+              }`}
+            >
+              <Pin size={12} fill={isPinned ? "currentColor" : "none"} />
+            </button>
+          </div>
+        );
+      })}
+    </section>
   );
 }
