@@ -31,6 +31,7 @@ export type ServiceType = {
   color: string;
   position: number;
   is_active: boolean;
+  is_archived: boolean;
 };
 
 export type RateCard = {
@@ -115,3 +116,28 @@ export function priceDelta(clientPrice: number, standardPrice: number): number |
   if (!standardPrice) return null;
   return Math.round(((clientPrice - standardPrice) / standardPrice) * 100);
 }
+
+/* ================= Ghi dữ liệu ================= */
+
+type WriteClient = {
+  from: (t: string) => {
+    insert: (v: unknown) => Promise<{ error: unknown }>;
+    update: (v: unknown) => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
+    delete: () => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
+  };
+};
+const db = () => supabase as unknown as WriteClient;
+
+async function run(p: Promise<{ error: unknown }>) {
+  const { error } = await p;
+  if (error) throw error;
+}
+
+export const insertRow = (table: string, values: Record<string, unknown>) =>
+  run(db().from(table).insert(values));
+
+export const updateRow = (table: string, id: string, values: Record<string, unknown>) =>
+  run(db().from(table).update(values).eq("id", id));
+
+export const deleteRow = (table: string, id: string) =>
+  run(db().from(table).delete().eq("id", id));

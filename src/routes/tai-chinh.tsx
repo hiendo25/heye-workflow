@@ -1,16 +1,50 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Building2, Plus, Tags } from "lucide-react";
+import { Archive, ArchiveRestore, Building2, Pencil, Tags, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/heye/AppShell";
+import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { workspaceQuery } from "@/lib/heye-data";
 import {
+  deleteRow,
   financeQuery,
+  insertRow,
   money,
   priceDelta,
-  rateCardsForClient,
+  updateRow,
   UNIT_LABEL,
+  type ClientCompany,
+  type FinanceData,
   type RateCard,
+  type ServiceType,
 } from "@/lib/finance-data";
 
 export const Route = createFileRoute("/tai-chinh")({
@@ -27,12 +61,14 @@ export const Route = createFileRoute("/tai-chinh")({
   component: TaiChinh,
 });
 
-const SIDE = [
+const NAV = [
   { id: "clients", label: "Khách hàng", icon: Building2 },
   { id: "rates", label: "Bảng giá", icon: Tags },
+  { id: "types", label: "Loại dịch vụ", icon: Tags },
 ] as const;
+type Tab = (typeof NAV)[number]["id"];
 
-type Tab = (typeof SIDE)[number]["id"];
+const PALETTE = ["#2563EB", "#7C3AED", "#0E9F6E", "#D97706", "#DB2777", "#0891B2", "#DC2626"];
 
 function TaiChinh() {
   const { data: ws } = useQuery(workspaceQuery);
@@ -40,19 +76,14 @@ function TaiChinh() {
   const [tab, setTab] = useState<Tab>("clients");
   const [clientId, setClientId] = useState<string | null>(null);
 
-  const standardCard = useMemo(
-    () => data?.rateCards.find((c) => c.client_id === null && !c.is_archived) ?? null,
-    [data],
-  );
-
   return (
     <AppShell namespaceName={ws?.namespace?.name}>
-      <aside className="flex w-[250px] shrink-0 flex-col border-r border-line bg-surface">
+      <aside className="flex w-[230px] shrink-0 flex-col border-r border-line bg-surface">
         <div className="px-3 pb-2 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-3">
           Tài chính
         </div>
         <div className="scroll-y flex-1 px-2 pb-4">
-          {SIDE.map((s) => (
+          {NAV.map((s) => (
             <button
               key={s.id}
               type="button"
@@ -67,238 +98,447 @@ function TaiChinh() {
               {s.label}
             </button>
           ))}
-
           <div className="px-2.5 pb-2 pt-4 text-[11px] font-bold uppercase tracking-wider text-ink-3">
             Sắp có
           </div>
           {["Hợp đồng", "Giờ của tôi", "Chi phí", "Giá vốn nhân sự"].map((s) => (
-            <div
-              key={s}
-              className="cursor-not-allowed px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60"
-            >
+            <div key={s} className="px-2.5 py-1.5 text-[13px] text-ink-3 opacity-60">
               {s}
             </div>
           ))}
         </div>
       </aside>
 
-      <main className="scroll-y min-w-0 flex-1 px-5 py-4">
+      <main className="scroll-y min-w-0 flex-1 px-6 py-5">
         {error ? (
-          <Notice tone="bad">
+          <div className="max-w-[70ch] rounded-lg border-l-[3px] border-bad bg-bad-soft px-4 py-3 text-[13px]">
             Chưa đọc được dữ liệu tài chính. Hãy chạy migration{" "}
-            <code className="rounded bg-background px-1">20260824000000_finance_clients_ratecards.sql</code>{" "}
-            trên Supabase trước.
-          </Notice>
+            <code className="rounded bg-background px-1 text-[12px]">
+              20260824000000_finance_clients_ratecards.sql
+            </code>{" "}
+            và{" "}
+            <code className="rounded bg-background px-1 text-[12px]">
+              20260824010000_service_type_archive.sql
+            </code>{" "}
+            trên Supabase.
+          </div>
         ) : isLoading || !data ? (
           <div className="py-16 text-center text-[13px] text-ink-3">Đang tải…</div>
         ) : tab === "clients" ? (
-          <Clients data={data} standardCard={standardCard} onOpenRates={(id) => { setClientId(id); setTab("rates"); }} />
+          <ClientsPanel data={data} />
+        ) : tab === "types" ? (
+          <TypesPanel data={data} />
         ) : (
-          <Rates data={data} clientId={clientId} setClientId={setClientId} />
+          <RatesPanel data={data} clientId={clientId} setClientId={setClientId} />
         )}
       </main>
     </AppShell>
   );
 }
 
-/* ---------------- Khách hàng ---------------- */
+/* ================= hook lưu dữ liệu ================= */
 
-function Clients({
-  data,
-  standardCard,
-  onOpenRates,
-}: {
-  data: NonNullable<ReturnType<typeof useQuery<typeof financeQuery>>["data"]> extends never
-    ? never
-    : import("@/lib/finance-data").FinanceData;
-  standardCard: RateCard | null;
-  onOpenRates: (id: string) => void;
-}) {
+function useSave() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fn: () => Promise<void>) => fn(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+      toast.success("Đã lưu");
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Không lưu được, thử lại sau.";
+      toast.error(msg);
+    },
+  });
+}
+
+/* ================= Khách hàng ================= */
+
+function ClientsPanel({ data }: { data: FinanceData }) {
+  const save = useSave();
+  const [edit, setEdit] = useState<ClientCompany | "new" | null>(null);
+  const [del, setDel] = useState<ClientCompany | null>(null);
+  const ns = data.clients[0]?.namespace_id ?? "";
+
   return (
     <>
-      <div className="text-[11.5px] text-ink-3">Tài chính / Khách hàng</div>
-      <div className="mt-1 flex items-center gap-3">
-        <h1 className="text-[20px] font-bold tracking-tight">Khách hàng</h1>
-        <div className="flex-1" />
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-white"
-        >
-          <Plus size={13} /> Thêm khách hàng
-        </button>
-      </div>
+      <SettingsPanel
+        title="Khách hàng"
+        description={
+          <>
+            Hợp đồng và bảng giá đều treo vào khách hàng, nên đây là tầng phải có trước.
+            Cùng một loại lao động bán cho mỗi khách một giá, vì vậy mỗi khách giữ bảng giá riêng.
+          </>
+        }
+      >
+        {data.clients.map((c) => {
+          const own = data.rateCards.find((r) => r.client_id === c.id && !r.is_archived);
+          return (
+            <PanelRow
+              key={c.id}
+              meta={
+                own ? (
+                  <span className="rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand">
+                    {own.name}
+                  </span>
+                ) : (
+                  "Dùng giá chuẩn"
+                )
+              }
+              actions={[
+                { label: "Sửa", icon: <Pencil size={14} />, onSelect: () => setEdit(c) },
+                {
+                  label: "Xoá",
+                  icon: <Trash2 size={14} />,
+                  danger: true,
+                  onSelect: () => setDel(c),
+                },
+              ]}
+            >
+              <div className="font-medium text-ink">{c.name}</div>
+              <div className="text-[11.5px] text-ink-3">
+                {[c.short_name, c.tax_id, c.contact_name].filter(Boolean).join(" · ") || "—"}
+              </div>
+            </PanelRow>
+          );
+        })}
+        <PanelFooter>
+          <Button size="sm" onClick={() => setEdit("new")}>
+            Thêm khách hàng
+          </Button>
+        </PanelFooter>
+      </SettingsPanel>
 
-      <Notice tone="info">
-        Hợp đồng và bảng giá đều treo vào <b>khách hàng</b> — nên đây là tầng phải có trước.
-        Cùng một loại lao động bán mỗi khách một giá, vì vậy mỗi khách giữ bảng giá riêng của mình.
-      </Notice>
+      <ClientDialog
+        open={edit !== null}
+        value={edit === "new" ? null : edit}
+        onClose={() => setEdit(null)}
+        onSubmit={(v) =>
+          save.mutate(
+            () =>
+              edit === "new"
+                ? insertRow("client_companies", { ...v, namespace_id: ns })
+                : updateRow("client_companies", (edit as ClientCompany).id, v),
+            { onSuccess: () => setEdit(null) },
+          )
+        }
+      />
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-line bg-surface">
-        <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
-          <thead>
-            <tr>
-              <Th>Khách hàng</Th>
-              <Th>Mã số thuế</Th>
-              <Th>Người liên hệ</Th>
-              <Th>Bảng giá riêng</Th>
-              <Th className="text-right">Tiền tệ</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.clients.map((c) => {
-              const own = data.rateCards.find((r) => r.client_id === c.id && !r.is_archived);
-              return (
-                <tr key={c.id} className="border-b border-line last:border-0 hover:bg-brand-soft/30">
-                  <Td>
-                    <div className="font-semibold text-ink">{c.name}</div>
-                    {c.short_name && (
-                      <div className="text-[11.5px] text-ink-3">{c.short_name}</div>
-                    )}
-                  </Td>
-                  <Td className="num text-ink-2">{c.tax_id ?? "—"}</Td>
-                  <Td className="text-ink-2">
-                    {c.contact_name ?? "—"}
-                    {c.contact_email && (
-                      <div className="text-[11.5px] text-ink-3">{c.contact_email}</div>
-                    )}
-                  </Td>
-                  <Td>
-                    {own ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenRates(c.id)}
-                        className="rounded-md bg-brand-soft px-2 py-0.5 text-[11.5px] font-semibold text-brand"
-                      >
-                        {own.name}
-                      </button>
-                    ) : (
-                      <span className="text-[11.5px] text-ink-3">
-                        Dùng {standardCard?.name ?? "giá chuẩn"}
-                      </span>
-                    )}
-                  </Td>
-                  <Td className="num text-right text-ink-2">{c.currency}</Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ConfirmDialog
+        open={del !== null}
+        title={`Xoá khách hàng "${del?.name ?? ""}"?`}
+        body="Bảng giá riêng của khách này cũng bị xoá theo. Thao tác không hoàn tác được."
+        onCancel={() => setDel(null)}
+        onConfirm={() =>
+          save.mutate(() => deleteRow("client_companies", del!.id), {
+            onSuccess: () => setDel(null),
+          })
+        }
+      />
     </>
   );
 }
 
-/* ---------------- Bảng giá ---------------- */
+function ClientDialog({
+  open,
+  value,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  value: ClientCompany | null;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  return (
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title={value ? "Sửa khách hàng" : "Thêm khách hàng"}
+      description="Khách hàng là chủ thể ký hợp đồng. Bảng giá riêng gắn vào đây."
+      fields={[
+        { name: "name", label: "Tên khách hàng", required: true, value: value?.name ?? "" },
+        { name: "short_name", label: "Tên gọi tắt", value: value?.short_name ?? "" },
+        { name: "tax_id", label: "Mã số thuế", value: value?.tax_id ?? "" },
+        { name: "contact_name", label: "Người liên hệ", value: value?.contact_name ?? "" },
+        { name: "contact_email", label: "Email", value: value?.contact_email ?? "" },
+        { name: "contact_phone", label: "Điện thoại", value: value?.contact_phone ?? "" },
+      ]}
+      onSubmit={onSubmit}
+    />
+  );
+}
 
-function Rates({
+/* ================= Loại dịch vụ ================= */
+
+function TypesPanel({ data }: { data: FinanceData }) {
+  const save = useSave();
+  const [edit, setEdit] = useState<ServiceType | "new" | null>(null);
+  const [del, setDel] = useState<ServiceType | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const ns = data.serviceTypes[0]?.namespace_id ?? data.clients[0]?.namespace_id ?? "";
+
+  const usage = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of data.rateCardItems)
+      m.set(i.service_type_id, (m.get(i.service_type_id) ?? 0) + 1);
+    return m;
+  }, [data.rateCardItems]);
+
+  const list = data.serviceTypes.filter((s) => showArchived || !s.is_archived);
+
+  return (
+    <>
+      <SettingsPanel
+        title="Loại dịch vụ"
+        description={
+          <>
+            Danh mục loại lao động của công ty, khai một lần dùng mãi. Đây là{" "}
+            <b>trung tâm lợi nhuận</b> — nhờ nó mới gộp được báo cáo “mảng Kiểm thử lãi bao nhiêu”
+            từ mọi dự án, mọi khách. Đặt tên theo <i>loại việc</i> (Kiểm thử), không theo{" "}
+            <i>việc cụ thể</i> (Test màn đăng nhập).
+          </>
+        }
+      >
+        {list.map((s) => {
+          const used = usage.get(s.id) ?? 0;
+          return (
+            <PanelRow
+              key={s.id}
+              muted={s.is_archived}
+              meta={used ? `${used} bảng giá` : "chưa dùng"}
+              actions={[
+                { label: "Sửa", icon: <Pencil size={14} />, onSelect: () => setEdit(s) },
+                {
+                  label: s.is_archived ? "Bỏ lưu trữ" : "Lưu trữ",
+                  icon: s.is_archived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
+                  onSelect: () =>
+                    save.mutate(() =>
+                      updateRow("service_types", s.id, { is_archived: !s.is_archived }),
+                    ),
+                },
+                {
+                  label: "Xoá",
+                  icon: <Trash2 size={14} />,
+                  danger: true,
+                  onSelect: () => setDel(s),
+                },
+              ]}
+            >
+              <span
+                className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
+                style={{ background: s.color }}
+              />
+              <span className="font-medium text-ink">{s.name}</span>
+              {s.code && <span className="num ml-2 text-[11px] text-ink-3">{s.code}</span>}
+            </PanelRow>
+          );
+        })}
+        <PanelFooter>
+          <Button size="sm" onClick={() => setEdit("new")}>
+            Thêm loại dịch vụ
+          </Button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="text-[12.5px] text-ink-2 hover:text-brand"
+          >
+            {showArchived ? "Ẩn mục lưu trữ" : "Xem mục lưu trữ"}
+          </button>
+        </PanelFooter>
+      </SettingsPanel>
+
+      <TypeDialog
+        open={edit !== null}
+        value={edit === "new" ? null : edit}
+        onClose={() => setEdit(null)}
+        onSubmit={(v) =>
+          save.mutate(
+            () =>
+              edit === "new"
+                ? insertRow("service_types", {
+                    ...v,
+                    namespace_id: ns,
+                    position: data.serviceTypes.length + 1,
+                  })
+                : updateRow("service_types", (edit as ServiceType).id, v),
+            { onSuccess: () => setEdit(null) },
+          )
+        }
+      />
+
+      <ConfirmDialog
+        open={del !== null}
+        title={`Xoá loại dịch vụ "${del?.name ?? ""}"?`}
+        body={
+          (usage.get(del?.id ?? "") ?? 0) > 0
+            ? "Loại này đang được dùng trong bảng giá. Xoá sẽ mất luôn các dòng giá đó — cân nhắc dùng Lưu trữ để giữ số liệu lịch sử."
+            : "Thao tác không hoàn tác được."
+        }
+        onCancel={() => setDel(null)}
+        onConfirm={() =>
+          save.mutate(() => deleteRow("service_types", del!.id), { onSuccess: () => setDel(null) })
+        }
+      />
+    </>
+  );
+}
+
+function TypeDialog({
+  open,
+  value,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  value: ServiceType | null;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [color, setColor] = useState(value?.color ?? PALETTE[0]);
+
+  return (
+    <FormDialog
+      key={value?.id ?? "new"}
+      open={open}
+      onClose={onClose}
+      title={value ? "Sửa loại dịch vụ" : "Thêm loại dịch vụ"}
+      description="Đặt tên theo loại lao động: Phát triển, Kiểm thử, Quản lý dự án…"
+      fields={[
+        { name: "name", label: "Tên loại dịch vụ", required: true, value: value?.name ?? "" },
+        { name: "code", label: "Mã viết tắt", value: value?.code ?? "", placeholder: "DEV, QC…" },
+      ]}
+      extra={
+        <div>
+          <div className="mb-1.5 text-[12.5px] font-medium text-ink-2">Màu nhận diện</div>
+          <div className="flex gap-2">
+            {PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                aria-label={`Chọn màu ${c}`}
+                className={`h-7 w-7 rounded-full transition ${
+                  color === c ? "ring-2 ring-brand ring-offset-2 ring-offset-surface" : ""
+                }`}
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </div>
+      }
+      onSubmit={(v) => onSubmit({ ...v, color })}
+    />
+  );
+}
+
+/* ================= Bảng giá ================= */
+
+function RatesPanel({
   data,
   clientId,
   setClientId,
 }: {
-  data: import("@/lib/finance-data").FinanceData;
+  data: FinanceData;
   clientId: string | null;
   setClientId: (id: string | null) => void;
 }) {
-  const visible = rateCardsForClient(data.rateCards, clientId);
+  const save = useSave();
+  const [cardEdit, setCardEdit] = useState<RateCard | "new" | null>(null);
+  const [cardDel, setCardDel] = useState<RateCard | null>(null);
+  const [lineFor, setLineFor] = useState<{ card: RateCard; itemId?: string } | null>(null);
+  const ns = data.clients[0]?.namespace_id ?? "";
+
+  const visible = data.rateCards.filter(
+    (c) => !c.is_archived && (clientId === null || c.client_id === null || c.client_id === clientId),
+  );
   const standard = data.rateCards.find((c) => c.client_id === null && !c.is_archived) ?? null;
   const stdPrice = new Map(
-    data.rateCardItems
-      .filter((i) => i.rate_card_id === standard?.id)
-      .map((i) => [i.service_type_id, i.price]),
+    data.rateCardItems.filter((i) => i.rate_card_id === standard?.id).map((i) => [i.service_type_id, i.price]),
   );
 
   return (
     <>
-      <div className="text-[11.5px] text-ink-3">Tài chính / Bảng giá</div>
-      <div className="mt-1 flex items-center gap-3">
-        <h1 className="text-[20px] font-bold tracking-tight">Bảng giá</h1>
-        <div className="flex-1" />
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-white"
-        >
-          <Plus size={13} /> Bảng giá mới
-        </button>
-      </div>
+      <SettingsPanel
+        title="Bảng giá"
+        description={
+          <>
+            Bảng giá <b>chỉ có đơn giá, không có số lượng</b> — số lượng thuộc về hợp đồng.
+            Nhờ vậy một bảng dùng lại được cho nhiều hợp đồng của cùng một khách, không phải nhớ
+            và gõ lại giá đã đàm phán. Khách không có bảng riêng thì rơi về giá chuẩn công ty.
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2.5">
+          <span className="mr-1 text-[12px] text-ink-3">Khách:</span>
+          <FilterChip on={clientId === null} onClick={() => setClientId(null)}>
+            Tất cả
+          </FilterChip>
+          {data.clients.map((c) => (
+            <FilterChip key={c.id} on={clientId === c.id} onClick={() => setClientId(c.id)}>
+              {c.short_name ?? c.name}
+            </FilterChip>
+          ))}
+        </div>
 
-      <Notice tone="info">
-        Bảng giá <b>chỉ có đơn giá, không có số lượng</b> — số lượng thuộc về hợp đồng.
-        Nhờ vậy một bảng giá dùng lại được cho nhiều hợp đồng của cùng một khách,
-        không phải nhớ và gõ lại giá đã đàm phán.
-      </Notice>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-[12.5px] text-ink-2">Xem theo khách:</span>
-        <Chip on={clientId === null} onClick={() => setClientId(null)}>
-          Tất cả
-        </Chip>
-        {data.clients.map((c) => (
-          <Chip key={c.id} on={clientId === c.id} onClick={() => setClientId(c.id)}>
-            {c.short_name ?? c.name}
-          </Chip>
-        ))}
-      </div>
-
-      {clientId && (
-        <p className="mt-2 text-[12.5px] text-ink-3">
-          Khi lập hợp đồng cho khách này, hệ thống chỉ hiện các bảng dưới đây —
-          bảng giá riêng của khách khác không bao giờ lộ sang.
-        </p>
-      )}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {visible.map((card) => {
           const items = data.rateCardItems.filter((i) => i.rate_card_id === card.id);
           const client = data.clients.find((c) => c.id === card.client_id);
           const isStd = card.client_id === null;
           return (
-            <section key={card.id} className="overflow-hidden rounded-xl border border-line bg-surface">
-              <header className="flex items-start gap-2 border-b border-line px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate text-[14px] font-bold">{card.name}</h2>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                        isStd ? "bg-line text-ink-2" : "bg-brand-soft text-brand"
-                      }`}
-                    >
-                      {isStd ? "CHUẨN CÔNG TY" : "RIÊNG KHÁCH"}
-                    </span>
-                  </div>
-                  <div className="text-[11.5px] text-ink-3">
-                    {client ? client.name : "Áp dụng cho mọi khách chưa có bảng riêng"}
-                  </div>
-                </div>
-                <span className="num shrink-0 text-[11.5px] text-ink-3">{card.currency}</span>
-              </header>
+            <div key={card.id} className="border-b border-line last:border-0">
+              <div className="flex items-center gap-2 bg-surface-2 px-4 py-2">
+                <span className="text-[13.5px] font-bold">{card.name}</span>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                    isStd ? "bg-line text-ink-2" : "bg-brand-soft text-brand"
+                  }`}
+                >
+                  {isStd ? "CHUẨN CÔNG TY" : "RIÊNG KHÁCH"}
+                </span>
+                <span className="text-[11.5px] text-ink-3">
+                  {client ? client.name : "Áp dụng khi khách chưa có bảng riêng"}
+                </span>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => setLineFor({ card })}
+                  className="rounded-md border border-line px-2 py-0.5 text-[12px] text-ink-2 hover:border-brand hover:text-brand"
+                >
+                  + Thêm dòng giá
+                </button>
+                {!isStd && (
+                  <button
+                    type="button"
+                    onClick={() => setCardDel(card)}
+                    className="rounded-md p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                    aria-label="Xoá bảng giá"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
 
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr>
-                    <Th>Loại dịch vụ</Th>
-                    <Th className="text-right">Đơn vị</Th>
-                    <Th className="text-right">Đơn giá bán</Th>
-                    {!isStd && <Th className="text-right">So với chuẩn</Th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it) => {
-                    const st = data.serviceTypes.find((s) => s.id === it.service_type_id);
-                    const d = isStd ? null : priceDelta(it.price, stdPrice.get(it.service_type_id) ?? 0);
-                    return (
-                      <tr key={it.id} className="border-b border-line last:border-0">
-                        <Td>
-                          <span
-                            className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
-                            style={{ background: st?.color }}
-                          />
-                          {st?.name ?? "—"}
-                          {st?.code && <span className="num ml-1.5 text-[11px] text-ink-3">{st.code}</span>}
-                        </Td>
-                        <Td className="text-right text-ink-2">{UNIT_LABEL[it.unit]}</Td>
-                        <Td className="num text-right font-semibold">{money(it.price)}</Td>
-                        {!isStd && (
-                          <Td className="num text-right">
+              {items.length === 0 ? (
+                <div className="px-4 py-4 text-[12.5px] text-ink-3">
+                  Bảng giá này chưa có dòng nào.
+                </div>
+              ) : (
+                items.map((it) => {
+                  const st = data.serviceTypes.find((s) => s.id === it.service_type_id);
+                  const d = isStd ? null : priceDelta(it.price, stdPrice.get(it.service_type_id) ?? 0);
+                  return (
+                    <PanelRow
+                      key={it.id}
+                      meta={
+                        <span className="flex items-center gap-4">
+                          <span className="text-ink-3">{UNIT_LABEL[it.unit]}</span>
+                          <span className="num w-24 text-right font-semibold text-ink">
+                            {money(it.price)}
+                          </span>
+                          <span className="num w-12 text-right">
                             {d === null ? (
                               <span className="text-ink-3">—</span>
                             ) : (
@@ -307,60 +547,383 @@ function Rates({
                                 {d}%
                               </span>
                             )}
-                          </Td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {card.note && (
-                <div className="border-t border-line px-4 py-2 text-[11.5px] text-ink-3">{card.note}</div>
+                          </span>
+                        </span>
+                      }
+                      actions={[
+                        {
+                          label: "Sửa giá",
+                          icon: <Pencil size={14} />,
+                          onSelect: () => setLineFor({ card, itemId: it.id }),
+                        },
+                        {
+                          label: "Xoá dòng",
+                          icon: <Trash2 size={14} />,
+                          danger: true,
+                          onSelect: () => save.mutate(() => deleteRow("rate_card_items", it.id)),
+                        },
+                      ]}
+                    >
+                      <span
+                        className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
+                        style={{ background: st?.color }}
+                      />
+                      {st?.name ?? "—"}
+                    </PanelRow>
+                  );
+                })
               )}
-            </section>
+            </div>
           );
         })}
-      </div>
 
-      <h3 className="mt-8 text-[15px] font-bold">Danh mục loại dịch vụ</h3>
-      <p className="mt-0.5 max-w-[70ch] text-[12.5px] text-ink-2">
-        Khai một lần cho cả công ty. Đây là <b>trung tâm lợi nhuận</b> — nhờ nó mới gộp được
-        báo cáo “mảng Kiểm thử của công ty lãi bao nhiêu” từ mọi dự án, mọi khách.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {data.serviceTypes.map((s) => (
-          <span
-            key={s.id}
-            className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px]"
-          >
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-            {s.name}
-            {s.code && <span className="num text-[11px] text-ink-3">{s.code}</span>}
-          </span>
-        ))}
-      </div>
+        <PanelFooter>
+          <Button size="sm" onClick={() => setCardEdit("new")}>
+            Thêm bảng giá
+          </Button>
+        </PanelFooter>
+      </SettingsPanel>
+
+      <RateCardDialog
+        open={cardEdit !== null}
+        clients={data.clients}
+        onClose={() => setCardEdit(null)}
+        onSubmit={(v) =>
+          save.mutate(() => insertRow("rate_cards", { ...v, namespace_id: ns }), {
+            onSuccess: () => setCardEdit(null),
+          })
+        }
+      />
+
+      <RateLineDialog
+        open={lineFor !== null}
+        data={data}
+        target={lineFor}
+        onClose={() => setLineFor(null)}
+        onSubmit={(v) =>
+          save.mutate(
+            () =>
+              lineFor?.itemId
+                ? updateRow("rate_card_items", lineFor.itemId, v)
+                : insertRow("rate_card_items", { ...v, rate_card_id: lineFor!.card.id }),
+            { onSuccess: () => setLineFor(null) },
+          )
+        }
+      />
+
+      <ConfirmDialog
+        open={cardDel !== null}
+        title={`Xoá bảng giá "${cardDel?.name ?? ""}"?`}
+        body="Mọi dòng giá trong bảng cũng bị xoá. Khách này sẽ rơi về giá chuẩn công ty."
+        onCancel={() => setCardDel(null)}
+        onConfirm={() =>
+          save.mutate(() => deleteRow("rate_cards", cardDel!.id), {
+            onSuccess: () => setCardDel(null),
+          })
+        }
+      />
     </>
   );
 }
 
-/* ---------------- phụ trợ ---------------- */
+function RateCardDialog({
+  open,
+  clients,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  clients: ClientCompany[];
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [name, setName] = useState("");
+  const [client, setClient] = useState<string>("none");
 
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th
-      className={`border-b border-line px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-ink-3 ${className}`}
-    >
-      {children}
-    </th>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>Thêm bảng giá</DialogTitle>
+          <DialogDescription>
+            Để trống khách hàng nếu đây là bảng giá chuẩn dùng chung cho cả công ty.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Field label="Tên bảng giá" required>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Bảng giá Bank X 2026"
+            />
+          </Field>
+          <Field label="Áp dụng cho khách">
+            <Select value={client} onValueChange={setClient}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Giá chuẩn công ty (mọi khách)</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!name.trim()}
+            onClick={() => {
+              onSubmit({ name: name.trim(), client_id: client === "none" ? null : client });
+              setName("");
+              setClient("none");
+            }}
+          >
+            Tạo bảng giá
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2 align-top ${className}`}>{children}</td>;
+function RateLineDialog({
+  open,
+  data,
+  target,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  data: FinanceData;
+  target: { card: RateCard; itemId?: string } | null;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const existing = target?.itemId
+    ? data.rateCardItems.find((i) => i.id === target.itemId)
+    : undefined;
+  const [typeId, setTypeId] = useState(existing?.service_type_id ?? "");
+  const [unit, setUnit] = useState(existing?.unit ?? "hour");
+  const [price, setPrice] = useState(existing ? String(existing.price) : "");
+
+  const used = new Set(
+    data.rateCardItems
+      .filter((i) => i.rate_card_id === target?.card.id && i.id !== target?.itemId)
+      .map((i) => i.service_type_id),
+  );
+  const options = data.serviceTypes.filter((s) => !s.is_archived && !used.has(s.id));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[420px]" key={target?.itemId ?? "new"}>
+        <DialogHeader>
+          <DialogTitle>{existing ? "Sửa dòng giá" : "Thêm dòng giá"}</DialogTitle>
+          <DialogDescription>
+            Mỗi loại dịch vụ chỉ có một dòng trong bảng — đây là đơn giá bán cho khách.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Field label="Loại dịch vụ" required>
+            <Select value={typeId} onValueChange={setTypeId} disabled={!!existing}>
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn loại dịch vụ" />
+              </SelectTrigger>
+              <SelectContent>
+                {(existing
+                  ? data.serviceTypes.filter((s) => s.id === existing.service_type_id)
+                  : options
+                ).map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Đơn vị">
+              <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hour">giờ</SelectItem>
+                  <SelectItem value="day">ngày</SelectItem>
+                  <SelectItem value="piece">gói</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Đơn giá bán" required>
+              <Input
+                className="num"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
+                placeholder="700000"
+              />
+            </Field>
+          </div>
+          {price && (
+            <p className="text-[12px] text-ink-3">
+              = <span className="num font-semibold text-ink-2">{money(Number(price))}</span> đ /{" "}
+              {UNIT_LABEL[unit]}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!typeId || !price}
+            onClick={() =>
+              onSubmit({ service_type_id: typeId, unit, price: Number(price) })
+            }
+          >
+            Lưu
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-function Chip({
+/* ================= dùng chung ================= */
+
+type FieldDef = {
+  name: string;
+  label: string;
+  value: string;
+  required?: boolean;
+  placeholder?: string;
+};
+
+function FormDialog({
+  open,
+  title,
+  description,
+  fields,
+  extra,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  fields: FieldDef[];
+  extra?: React.ReactNode;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [form, setForm] = useState<Record<string, string>>(
+    Object.fromEntries(fields.map((f) => [f.name, f.value])),
+  );
+  const required = fields.filter((f) => f.required);
+  const ok = required.every((f) => (form[f.name] ?? "").trim());
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {fields.map((f) => (
+            <Field key={f.name} label={f.label} required={f.required}>
+              <Input
+                value={form[f.name] ?? ""}
+                placeholder={f.placeholder ?? ""}
+                onChange={(e) => setForm((s) => ({ ...s, [f.name]: e.target.value }))}
+              />
+            </Field>
+          ))}
+          {extra}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!ok}
+            onClick={() =>
+              onSubmit(
+                Object.fromEntries(
+                  Object.entries(form).map(([k, v]) => [k, v.trim() === "" ? null : v.trim()]),
+                ),
+              )
+            }
+          >
+            Lưu
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean | undefined;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+        {label}
+        {required && <span className="ml-0.5 text-bad">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{body}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Huỷ</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-bad text-white hover:bg-bad/90"
+          >
+            Xoá
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function FilterChip({
   children,
   on,
   onClick,
@@ -373,7 +936,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border px-2.5 py-1 text-[12.5px] ${
+      className={`rounded-md border px-2 py-0.5 text-[12px] ${
         on
           ? "border-brand bg-brand font-semibold text-white"
           : "border-line bg-surface text-ink-2 hover:text-ink"
@@ -381,17 +944,5 @@ function Chip({
     >
       {children}
     </button>
-  );
-}
-
-function Notice({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "bad" }) {
-  const c =
-    tone === "bad"
-      ? "border-bad/40 bg-bad/10 text-ink"
-      : "border-brand/30 bg-brand-soft text-ink";
-  return (
-    <div className={`mt-3 max-w-[80ch] rounded-lg border-l-[3px] px-3.5 py-2.5 text-[12.5px] ${c}`}>
-      {children}
-    </div>
   );
 }
