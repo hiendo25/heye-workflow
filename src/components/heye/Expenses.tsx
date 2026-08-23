@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Check,
+  Copy as CopyIcon,
   Paperclip,
   Plus,
   Receipt,
@@ -31,6 +32,7 @@ import {
   expenseItemAmounts,
   expenseServices,
   expenseTotals,
+  whyCannotExpense,
   EXPENSE_STATUS_LABEL,
   money,
   type Expense,
@@ -67,6 +69,7 @@ export function Expenses({
   onUpdate,
   onDelete,
   onSetStatus,
+  onDuplicate,
 }: {
   data: FinanceData;
   users: User[];
@@ -75,6 +78,7 @@ export function Expenses({
   onUpdate: (id: string, v: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
   onSetStatus: (id: string, status: ExpenseStatus, note?: string) => void;
+  onDuplicate: (expense: Expense) => void;
 }) {
   const [filter, setFilter] = useState<"all" | ExpenseStatus>("all");
   const [adding, setAdding] = useState(false);
@@ -255,6 +259,15 @@ export function Expenses({
                               <Undo2 size={13} />
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => onDuplicate(e)}
+                            className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                            aria-label="Nhân đôi"
+                            title="Nhân đôi phiếu này"
+                          >
+                            <CopyIcon size={13} />
+                          </button>
                           <button
                             type="button"
                             onClick={() => onDelete(e.id)}
@@ -532,6 +545,7 @@ function ExpenseDialog({
   const options = expenseServices(data.services);
   const service = data.services.find((s) => s.id === serviceId);
   const free = service?.billing_type === "non_billable";
+  const blocked = serviceId ? whyCannotExpense(data, serviceId) : null;
 
   const amounts = rows.map((r) =>
     expenseItemAmounts({
@@ -553,7 +567,8 @@ function ExpenseDialog({
   const setRow = (i: number, patch: Partial<Draft>) =>
     setRows((r) => r.map((x, n) => (n === i ? { ...x, ...patch } : x)));
 
-  const valid = reference.trim() && serviceId && userId && net >= 0 && rows.some((r) => r.description.trim());
+  const valid =
+    reference.trim() && serviceId && userId && !blocked && rows.some((r) => r.description.trim());
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -775,7 +790,13 @@ function ExpenseDialog({
             </section>
           )}
 
-          {net > 0 && (
+          {blocked && (
+            <div className="rounded-lg border-l-[3px] border-bad bg-bad-soft px-3.5 py-2.5 text-[12.5px]">
+              {blocked}
+            </div>
+          )}
+
+          {net > 0 && !blocked && (
             <div className="rounded-lg bg-brand-soft px-3.5 py-2.5 text-[12.5px]">
               <Line label="Tổng trước thuế" value={money(Math.round(net))} />
               <Line label="Thuế đầu vào" value={money(Math.round(tax))} muted />

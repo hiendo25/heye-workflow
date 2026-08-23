@@ -945,3 +945,31 @@ export function expenseImpact(
 export function expenseServices(services: BudgetService[]): BudgetService[] {
   return services.filter((s) => s.allow_expense && s.unit === "piece");
 }
+
+/**
+ * Vì sao KHÔNG ghi được chi phí vào một hạng mục.
+ * Theo bài "Can't Log an Expense" của Productive.
+ */
+export function whyCannotExpense(
+  data: Pick<FinanceData, "budgets" | "services">,
+  serviceId: string,
+): string | null {
+  const s = data.services.find((x) => x.id === serviceId);
+  if (!s) return "Hạng mục không tồn tại.";
+
+  const b = data.budgets.find((x) => x.id === s.budget_id);
+  if (!b) return "Hạng mục không thuộc hợp đồng nào.";
+
+  if (b.status === "delivered")
+    return `Hợp đồng "${b.name}" đã bàn giao nên khoá. Mở lại nếu cần ghi thêm chi phí.`;
+
+  if (s.unit !== "piece")
+    return `Hạng mục "${s.name}" đang tính theo ${
+      UNIT_LABEL[s.unit]
+    }. Chỉ hạng mục đơn vị "gói" mới ghi được chi phí — sửa đơn vị trong hợp đồng.`;
+
+  if (!s.allow_expense)
+    return `Hạng mục "${s.name}" chưa bật cho ghi chi phí. Bật lại trong phần sửa hạng mục.`;
+
+  return null;
+}

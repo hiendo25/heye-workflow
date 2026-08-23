@@ -1574,6 +1574,39 @@ function ExpensePanel({
         })
       }
       onUpdate={(id, v) => save.mutate(() => updateRow("expenses", id, v))}
+      onDuplicate={(e) =>
+        save.mutate(async () => {
+          // Ngày đặt lại về hôm nay, nội dung thêm tiền tố; ngày hạn và ngày
+          // thanh toán KHÔNG chép sang — theo đúng cách Productive làm.
+          const created = await insertReturning("expenses", {
+            namespace_id: e.namespace_id,
+            user_id: e.user_id,
+            service_id: e.service_id,
+            ticket_id: e.ticket_id,
+            reference: `Bản sao của ${e.reference}`,
+            date: new Date().toISOString().slice(0, 10),
+            currency: e.currency,
+            vendor: e.vendor,
+            attachment_name: e.attachment_name,
+            markup_type: e.markup_type,
+            markup_value: e.markup_value,
+            is_reimbursed: e.is_reimbursed,
+            status: "submitted",
+          });
+          if (!created) return;
+          for (const it of data.expenseItems.filter((i) => i.expense_id === e.id)) {
+            await insertRow("expense_items", {
+              expense_id: created.id,
+              description: it.description,
+              unit_price: it.unit_price,
+              quantity: it.quantity,
+              tax_rate: it.tax_rate,
+              tax_included: it.tax_included,
+              position: it.position,
+            });
+          }
+        })
+      }
       onDelete={(id) => save.mutate(() => deleteRow("expenses", id))}
       onSetStatus={(id, status, note) =>
         save.mutate(() =>

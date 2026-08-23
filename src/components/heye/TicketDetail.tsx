@@ -55,6 +55,7 @@ export function TicketDetail({
   onDeleteTime,
   onStartTimer,
   onStopTimer,
+  onStartFresh,
   allUsers,
   nsId,
 }: {
@@ -71,11 +72,17 @@ export function TicketDetail({
   onDeleteTime: (id: string) => void;
   onStartTimer: (entryId: string) => void;
   onStopTimer: (entryId: string) => void;
+  /** Bấm giờ khi chưa có dòng nào — tự tạo dòng 0 phút rồi chạy. */
+  onStartFresh: (v: Record<string, unknown>) => void;
   allUsers: User[];
   nsId: string;
 }) {
   const [saving, setSaving] = useState(false);
   const [logging, setLogging] = useState(false);
+  // Đã có đồng hồ chạy trên công việc này chưa
+  const running = data.timeEntries.some(
+    (e) => e.ticket_id === ticket.id && e.timer_started_at,
+  );
 
   // Chỉ hạng mục của hợp đồng đã nối với dự án này.
   const budgets = data.budgets.filter((b) => b.project_id === projectId);
@@ -194,6 +201,32 @@ export function TicketDetail({
                   {fmtDuration(logged)}
                 </span>
                 <div className="flex-1" />
+                {current && !running && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      onStartFresh({
+                        namespace_id: nsId,
+                        user_id: allUsers[0]?.id,
+                        service_id: current.id,
+                        ticket_id: ticket.id,
+                        date: isoDate(new Date()),
+                        minutes: 0,
+                        billable_minutes: 0,
+                        cost_rate_snapshot: Math.round(
+                          costRateFor(data, allUsers[0]?.id ?? "", {
+                            onDate: isoDate(new Date()),
+                            budgetId: current.budget_id,
+                          }).total,
+                        ),
+                        timer_started_at: new Date().toISOString(),
+                      })
+                    }
+                    title="Bắt đầu bấm giờ cho công việc này"
+                  >
+                    <Play size={13} /> Bấm giờ
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -201,7 +234,7 @@ export function TicketDetail({
                   onClick={() => setLogging(true)}
                   title={current ? "" : "Gán hạng mục trước khi ghi giờ"}
                 >
-                  <Plus size={13} /> Ghi nhận giờ
+                  <Plus size={13} /> Ghi tay
                 </Button>
               </div>
 

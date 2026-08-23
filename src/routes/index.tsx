@@ -50,6 +50,30 @@ function Index() {
 
   // Bấm giờ ngay trên công việc. Mỗi người một đồng hồ nên phải dừng cái
   // đang chạy trước khi bật cái mới.
+  // Bấm giờ khi công việc chưa có dòng giờ nào: tạo dòng 0 phút rồi chạy luôn.
+  const startFresh = useMutation({
+    mutationFn: async (v: Record<string, unknown>) => {
+      const me = data?.users?.[0];
+      const run = fin?.timeEntries.find((e) => e.user_id === me?.id && e.timer_started_at);
+      if (run?.timer_started_at) {
+        const mins = timerElapsed(run.timer_started_at);
+        await insertRow("timer_logs", {
+          time_entry_id: run.id,
+          started_at: run.timer_started_at,
+          stopped_at: new Date().toISOString(),
+          minutes: mins,
+        });
+        await updateRow("time_entries", run.id, {
+          minutes: run.minutes + mins,
+          billable_minutes: run.billable_minutes > 0 ? run.billable_minutes + mins : 0,
+          timer_started_at: null,
+        });
+      }
+      await insertRow("time_entries", v);
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
+
   const startTimer = useMutation({
     mutationFn: async (id: string) => {
       const me = data?.users?.[0];
@@ -246,6 +270,7 @@ function Index() {
             nsId={data?.namespace?.id ?? ""}
             onLogTime={(v) => logTime.mutate(v)}
             onDeleteTime={(id) => delTime.mutate(id)}
+            onStartFresh={(v) => startFresh.mutate(v)}
             onStartTimer={(id) => startTimer.mutate(id)}
             onStopTimer={(id) => stopTimer.mutate(id)}
           />
