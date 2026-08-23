@@ -48,29 +48,53 @@
   --color-prio-high: #D97706;
   --color-prio-mid: #2563EB;
   --color-prio-low: var(--ink-3);
+
+  /* Màu số liệu tài chính: lãi / cảnh báo / vượt ngân sách.
+     Tách khỏi màu thương hiệu để trạng thái đọc được ngay bằng mắt. */
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-surface-2: var(--surface-2);
 }
 
 :root {
   --radius: 0.5rem;
   --bg: #F7F7FB;
   --surface: #FFFFFF;
+  --surface-2: #FBFBFE;
   --ink: #16151D;
   --ink-2: #5A5670;
   --ink-3: #8B87A0;
   --line: #E7E5F0;
   --brand: #5B3DF5;
   --brand-soft: #EEEBFE;
+  --good: #0E9F6E;
+  --good-soft: #E3F5EE;
+  --warn: #D97706;
+  --warn-soft: #FDF1E3;
+  --bad: #DC2626;
+  --bad-soft: #FCEBEB;
 }
 
 .dark {
   --bg: #0F0E15;
   --surface: #17161F;
+  --surface-2: #1D1B27;
   --ink: #F2F1F7;
   --ink-2: #A9A5BD;
   --ink-3: #7A7691;
   --line: #282634;
   --brand: #8B72FF;
   --brand-soft: #241E42;
+  --good: #34D399;
+  --good-soft: #0E2B22;
+  --warn: #FBBF24;
+  --warn-soft: #2E2410;
+  --bad: #F87171;
+  --bad-soft: #2E1616;
 }
 
 @layer base {

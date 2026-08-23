@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Moon, Sun, Plus, ChevronDown } from "lucide-react";
-import { IconRail } from "@/components/heye/IconRail";
+import { Plus, ChevronDown } from "lucide-react";
+import { AppShell } from "@/components/heye/AppShell";
 import { Sidebar } from "@/components/heye/Sidebar";
 import { TicketTable, type Row } from "@/components/heye/TicketTable";
 import { buildTree, findNode, workspaceQuery, type TreeNode } from "@/lib/heye-data";
@@ -33,12 +33,6 @@ function Index() {
   const { data } = useQuery(workspaceQuery);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
-
   const tree = useMemo<TreeNode[]>(() => (data ? buildTree(data) : []), [data]);
 
   useEffect(() => {
@@ -86,28 +80,7 @@ function Index() {
     : `${data?.namespace?.name ?? "AIONtech"} / Việc của tôi`;
 
   return (
-    <div className="flex h-screen flex-col bg-background text-ink">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
-        <span className="text-[16px] font-extrabold tracking-tight text-brand">HeyE</span>
-        <span className="rounded-md border border-line px-2 py-[3px] text-[12px] text-ink-2">
-          {data?.namespace?.name ?? "AIONtech"}
-        </span>
-        <div className="flex-1" />
-        <button
-          type="button"
-          aria-label="Đổi giao diện sáng/tối"
-          onClick={() => setDark((d) => !d)}
-          className="rounded-md p-1.5 text-ink-2 hover:bg-brand-soft hover:text-brand"
-        >
-          {dark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white">
-          H
-        </span>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <IconRail />
+    <AppShell namespaceName={data?.namespace?.name}>
         <Sidebar
           tree={tree}
           selectedId={selectedId}
@@ -161,7 +134,6 @@ function Index() {
             <TicketTable statuses={data?.statuses ?? []} rows={rows} />
           </div>
         </main>
-      </div>
-    </div>
+    </AppShell>
   );
 }
