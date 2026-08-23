@@ -6,6 +6,7 @@ import { AppShell } from "@/components/heye/AppShell";
 import { Sidebar } from "@/components/heye/Sidebar";
 import { TicketTable, type Row } from "@/components/heye/TicketTable";
 import { buildTree, findNode, workspaceQuery, type TreeNode } from "@/lib/heye-data";
+import { financeQuery } from "@/lib/finance-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +32,7 @@ const FILTERS = ["Trạng thái", "Người phụ trách", "Tag", "Độ ưu ti�
 
 function Index() {
   const { data } = useQuery(workspaceQuery);
+  const { data: fin } = useQuery(financeQuery);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tree = useMemo<TreeNode[]>(() => (data ? buildTree(data) : []), [data]);
@@ -58,6 +60,9 @@ function Index() {
     const groupName = new Map(data.groups.map((g) => [g.id, g.name]));
     const userById = new Map(data.users.map((u) => [u.id, u]));
     const tagById = new Map(data.tags.map((t) => [t.id, t]));
+    // Nối công việc -> hạng mục bán, để thấy giờ log sẽ chảy về đâu.
+    const svcById = new Map((fin?.services ?? []).map((s) => [s.id, s]));
+    const typeById = new Map((fin?.serviceTypes ?? []).map((t) => [t.id, t]));
     return data.tickets
       .filter((t) => !allowed || allowed.has(t.group_id))
       .map((ticket) => ({
@@ -71,8 +76,19 @@ function Index() {
           .filter((tt) => tt.ticket_id === ticket.id)
           .map((tt) => tagById.get(tt.tag_id))
           .filter(Boolean) as Row["tags"],
+        service: (() => {
+          const sv = ticket.budget_service_id ? svcById.get(ticket.budget_service_id) : null;
+          if (!sv) return undefined;
+          const ty = typeById.get(sv.service_type_id);
+          return {
+            name: sv.name,
+            typeName: ty?.name ?? sv.name,
+            color: ty?.color ?? "#8B87A0",
+            billable: sv.billing_type !== "non_billable",
+          };
+        })(),
       }));
-  }, [data, selected]);
+  }, [data, fin, selected]);
 
   const title = selected ? selected.name : "Việc của tôi";
   const breadcrumb = selected

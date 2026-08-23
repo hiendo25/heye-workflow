@@ -8,6 +8,8 @@ export type Row = {
   groupName: string;
   users: User[];
   tags: Tag[];
+  /** Hạng mục bán mà công việc này nối tới — nơi giờ log chảy về để tính tiền. */
+  service?: { name: string; typeName: string; color: string; billable: boolean } | undefined;
 };
 
 const prioClass: Record<string, string> = {
@@ -51,17 +53,18 @@ export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[
       <table className="w-full table-fixed border-collapse">
         <thead className="sticky top-0 z-10 bg-surface">
           <tr className="border-b border-line text-[11px] uppercase tracking-wide text-ink-3">
-            <th className="w-[46%] px-3 py-2 text-left font-medium">Tên công việc</th>
-            <th className="w-[18%] px-3 py-2 text-left font-medium">Nhóm</th>
-            <th className="w-[20%] px-3 py-2 text-left font-medium">Người phụ trách</th>
-            <th className="w-[16%] px-3 py-2 text-left font-medium">Độ ưu tiên</th>
+            <th className="w-[38%] px-3 py-2 text-left font-medium">Tên công việc</th>
+            <th className="w-[15%] px-3 py-2 text-left font-medium">Nhóm</th>
+            <th className="w-[19%] px-3 py-2 text-left font-medium">Hạng mục</th>
+            <th className="w-[16%] px-3 py-2 text-left font-medium">Người phụ trách</th>
+            <th className="w-[12%] px-3 py-2 text-left font-medium">Độ ưu tiên</th>
           </tr>
         </thead>
         <tbody>
           {groupsWithRows.map(({ status, items }) => (
             <Fragment key={status.id}>
               <tr className="border-b border-line bg-background/60">
-                <td colSpan={4} className="px-3 py-1.5">
+                <td colSpan={5} className="px-3 py-1.5">
                   <span className="inline-flex items-center gap-2">
                     <span
                       className="rounded-md px-2 py-[2px] text-[11px] font-semibold"
@@ -95,6 +98,34 @@ export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[
                     </div>
                   </td>
                   <td className="truncate px-3 py-2 text-ink-2">{r.groupName}</td>
+                  <td className="px-3 py-2">
+                    {r.service ? (
+                      <span className="flex min-w-0 items-center gap-1.5" title={r.service.name}>
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: r.service.color }}
+                        />
+                        <span className="truncate text-[12.5px] text-ink-2">
+                          {r.service.typeName}
+                        </span>
+                        {!r.service.billable && (
+                          <span
+                            className="shrink-0 rounded bg-line px-1 text-[10px] text-ink-3"
+                            title="Hạng mục không tính tiền khách"
+                          >
+                            0đ
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span
+                        className="text-[12px] text-warn"
+                        title="Chưa nối hạng mục — giờ log sẽ không ra tiền"
+                      >
+                        chưa gán
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <Avatars users={r.users} />
                   </td>

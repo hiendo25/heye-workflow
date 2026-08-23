@@ -43,6 +43,8 @@ export type Ticket = {
   priority: "cao" | "thuong" | "thap" | null;
   deadline: string | null;
   position: number;
+  /** Hạng mục bán mà công việc nối tới. Log giờ trên việc này sẽ tự chảy về đó. */
+  budget_service_id: string | null;
 };
 
 export type Workspace = {
