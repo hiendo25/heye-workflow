@@ -51,6 +51,16 @@ function Index() {
   // Bấm giờ ngay trên công việc. Mỗi người một đồng hồ nên phải dừng cái
   // đang chạy trước khi bật cái mới.
   // Bấm giờ khi công việc chưa có dòng giờ nào: tạo dòng 0 phút rồi chạy luôn.
+  // Ước tính giờ + khoảng ngày trên công việc — cơ sở dự báo.
+  const savePlan = useMutation({
+    mutationFn: async (p: { id: string; v: Record<string, unknown> }) =>
+      updateRow("tickets", p.id, p.v),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["heye-workspace"] });
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+  });
+
   const startFresh = useMutation({
     mutationFn: async (v: Record<string, unknown>) => {
       const me = data?.users?.[0];
@@ -271,6 +281,7 @@ function Index() {
             onLogTime={(v) => logTime.mutate(v)}
             onDeleteTime={(id) => delTime.mutate(id)}
             onStartFresh={(v) => startFresh.mutate(v)}
+            onSavePlan={(v) => savePlan.mutate({ id: open.ticket.id, v })}
             onStartTimer={(id) => startTimer.mutate(id)}
             onStopTimer={(id) => stopTimer.mutate(id)}
           />

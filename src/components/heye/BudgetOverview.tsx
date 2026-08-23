@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BarChart3, EyeOff } from "lucide-react";
 import {
   budgetRunsOutOn,
+  type ForecastTicket,
   budgetSummary,
   fmtDuration,
   forecastByDate,
@@ -23,7 +24,16 @@ type Grain = "month" | "week";
  * Cả hai đều đúng, chỉ khác câu hỏi. Chênh lệch giữa giờ đã làm và giờ
  * tính tiền chính là chỗ lợi nhuận rò rỉ — chỉ tab Lợi nhuận mới thấy.
  */
-export function BudgetOverview({ data, budgetId }: { data: FinanceData; budgetId: string }) {
+export function BudgetOverview({
+  data,
+  budgetId,
+  tickets,
+}: {
+  data: FinanceData;
+  budgetId: string;
+  /** Công việc có ước tính giờ + khoảng ngày — cơ sở dự báo. */
+  tickets: ForecastTicket[];
+}) {
   const [tab, setTab] = useState<Tab>("budgeting");
   const [grain, setGrain] = useState<Grain>("month");
   const [showChart, setShowChart] = useState(true);
@@ -31,10 +41,16 @@ export function BudgetOverview({ data, budgetId }: { data: FinanceData; budgetId
   const view = tab;
   const todayVn = fmtVn(isoDate(new Date()));
   const s = useMemo(() => budgetSummary(data, budgetId), [data, budgetId]);
-  const series = useMemo(() => buildSeries(data, budgetId, grain), [data, budgetId, grain]);
+  const series = useMemo(
+    () => buildSeries(data, tickets, budgetId, grain),
+    [data, tickets, budgetId, grain],
+  );
 
   // Ngày ngân sách cạn theo lịch đã xếp — giá trị lớn nhất của dự báo.
-  const runOut = useMemo(() => budgetRunsOutOn(data, budgetId), [data, budgetId]);
+  const runOut = useMemo(
+    () => budgetRunsOutOn(data, tickets, budgetId),
+    [data, tickets, budgetId],
+  );
 
   const timePct = s.soldQty ? Math.min(100, (s.recognizedMin / 60 / s.soldQty) * 100) : 0;
   const workedPct = s.estimateQty ? Math.min(100, (s.workedMin / 60 / s.estimateQty) * 100) : 0;
@@ -198,7 +214,12 @@ type Point = {
 };
 
 /** Cộng dồn theo kỳ — giống chế độ Cumulative của Productive. */
-function buildSeries(data: FinanceData, budgetId: string, grain: Grain): Point[] {
+function buildSeries(
+  data: FinanceData,
+  tickets: ForecastTicket[],
+  budgetId: string,
+  grain: Grain,
+): Point[] {
   const s = budgetSummary(data, budgetId);
   const svc = new Map(s.services.map((x) => [x.id, x]));
   const today = isoDate(new Date());
@@ -235,18 +256,20 @@ function buildSeries(data: FinanceData, budgetId: string, grain: Grain): Point[]
     b.rev += im.revenue;
   }
 
-  // Cột nhạt: giờ đã xếp lịch, tính cho mọi kỳ có booking.
-  for (const b of data.bookings) {
-    const sv = svc.get(b.service_id);
+  // Cột nhạt: giờ dự kiến theo ước tính công việc, rải đều trong khoảng ngày.
+  for (const t of tickets) {
+    if (!t.budget_service_id || !t.estimate_hours || !t.start_date || !t.deadline) continue;
+    const sv = svc.get(t.budget_service_id);
     if (!sv || (budgetId && sv.budget_id !== budgetId)) continue;
-    for (const day of workdaysBetween(b.start_date, b.end_date)) {
-      touch(keyOf(day)).scheduled += Number(b.hours_per_day) * 60;
-    }
+    const days = workdaysBetween(t.start_date, t.deadline);
+    if (!days.length) continue;
+    const perDay = (Number(t.estimate_hours) / days.length) * 60;
+    for (const day of days) touch(keyOf(day)).scheduled += perDay;
   }
 
   // Phần TƯƠNG LAI: đọc từ lịch đã xếp trong Resource Planner.
   // Không có lịch thì không có đường đứt — dự báo không phải phép ngoại suy.
-  for (const [day, f] of forecastByDate(data, budgetId)) {
+  for (const [day, f] of forecastByDate(data, tickets, budgetId)) {
     const b = touch(keyOf(day));
     b.rev += f.revenue;
     b.cost += f.cost;
@@ -338,6 +361,7 @@ function Chart({
 
   const firstFuture = series.findIndex((p) => p.isFuture);
   const cutX = firstFuture > 0 ? x(firstFuture - 1) : -1;
+  const [hover, setHover] = useState<number | null>(null);
 
   /** Đường cong mượt qua các điểm, kiểu Catmull-Rom. */
   const smooth = (pts: { x: number; y: number }[]): string => {
@@ -372,8 +396,58 @@ function Chart({
   const wideW = Math.min(96, slot * 0.66);
   const narrowW = wideW * 0.45;
 
+  const hp = hover !== null ? series[hover] : null;
+
   return (
-    <div className="rounded-xl border border-line bg-surface px-4 pb-2 pt-4">
+    <div className="relative rounded-xl border border-line bg-surface px-4 pb-2 pt-4">
+      {hp && (
+        <div
+          className="pointer-events-none absolute z-10 min-w-[196px] rounded-lg border border-line bg-surface px-3 py-2 text-[11.5px] shadow-lg"
+          style={{
+            left: `calc(${(x(hover!) / W) * 100}% + ${x(hover!) / W > 0.6 ? -210 : 14}px)`,
+            top: 28,
+          }}
+        >
+          <div className="mb-1 font-bold">{hp.label}</div>
+          <TipRow color="#F5C86B" label="Giờ dự kiến" value={`${Math.round(hp.scheduled / 60)}h`} />
+          <TipRow
+            color="#E9A319"
+            label={tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
+            value={`${Math.round((tab === "budgeting" ? hp.billable : hp.worked) / 60)}h`}
+          />
+          <div className="my-1 border-t border-line" />
+          {tab === "budgeting" ? (
+            <>
+              <TipRow color="var(--bad)" label="Trần hợp đồng" value={money(Math.round(contractTotal))} />
+              <TipRow color="var(--good)" label="Đã dùng" value={money(Math.round(hp.revenue))} />
+              <TipRow
+                label="Còn lại"
+                value={money(Math.round(contractTotal - hp.revenue))}
+                tone={contractTotal - hp.revenue < 0 ? "bad" : undefined}
+                bold
+              />
+            </>
+          ) : (
+            <>
+              <TipRow color="#2563EB" label="Doanh thu" value={money(Math.round(hp.revenue))} />
+              <TipRow label="Chi phí" value={money(Math.round(hp.cost))} />
+              <TipRow
+                color="var(--good)"
+                label="Lợi nhuận"
+                value={money(Math.round(hp.profit))}
+                tone={hp.profit >= 0 ? "good" : "bad"}
+                bold
+              />
+            </>
+          )}
+          {hp.isFuture && (
+            <div className="mt-1 border-t border-line pt-1 text-[10.5px] text-ink-3">
+              Số dự báo theo ước tính công việc
+            </div>
+          )}
+        </div>
+      )}
+
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Biểu đồ diễn biến">
         {/* Lưới ngang + hai trục */}
         {[0, 0.25, 0.5, 0.75, 1].map((r) => {
@@ -525,6 +599,51 @@ function Chart({
             </text>
           </g>
         )}
+
+        {/* Vùng bắt chuột cho từng kỳ + đường dọc và chấm khi hover */}
+        {hover !== null && series[hover] && (
+          <g pointerEvents="none">
+            <line
+              x1={x(hover)}
+              y1={pad.t}
+              x2={x(hover)}
+              y2={pad.t + ih}
+              stroke="var(--ink-3)"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+            {(tab === "budgeting"
+              ? [{ v: series[hover]!.revenue, c: "var(--good)" }]
+              : [
+                  { v: series[hover]!.revenue, c: "#2563EB" },
+                  { v: series[hover]!.profit, c: "var(--good)" },
+                ]
+            ).map((d, n) => (
+              <circle
+                key={n}
+                cx={x(hover)}
+                cy={yM(d.v)}
+                r="4"
+                fill="var(--surface)"
+                stroke={d.c}
+                strokeWidth="2.5"
+              />
+            ))}
+          </g>
+        )}
+
+        {series.map((_, i) => (
+          <rect
+            key={`hit-${i}`}
+            x={pad.l + slot * i}
+            y={pad.t}
+            width={slot}
+            height={ih}
+            fill="transparent"
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          />
+        ))}
 
         {/* Nhãn kỳ */}
         {series.map((p, i) => (
@@ -732,3 +851,38 @@ const fmtWeek = (k: string) => {
   const [, m, d] = k.split("-");
   return `${d}/${m}`;
 };
+
+/** Một dòng trong hộp thông tin khi rê chuột lên biểu đồ. */
+function TipRow({
+  label,
+  value,
+  color,
+  tone,
+  bold,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+  tone?: "good" | "bad" | undefined;
+  bold?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-[1px]">
+      <span className="inline-flex items-center gap-1.5 text-ink-2">
+        {color ? (
+          <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
+        ) : (
+          <span className="w-2" />
+        )}
+        {label}
+      </span>
+      <span
+        className={`num ${bold ? "font-bold" : ""} ${
+          tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : ""
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}

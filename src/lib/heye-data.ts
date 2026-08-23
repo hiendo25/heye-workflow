@@ -41,7 +41,10 @@ export type Ticket = {
   title: string;
   status_id: string | null;
   priority: "cao" | "thuong" | "thap" | null;
+  start_date: string | null;
   deadline: string | null;
+  /** Giờ ước tính để làm xong việc này — cơ sở dự báo. */
+  estimate_hours: number | null;
   position: number;
   /** Hạng mục bán mà công việc nối tới. Log giờ trên việc này sẽ tự chảy về đó. */
   budget_service_id: string | null;

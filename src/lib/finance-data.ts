@@ -167,7 +167,6 @@ export type FinanceData = {
   timeEntries: TimeEntry[];
   submissions: TimesheetSubmission[];
   timerLogs: TimerLog[];
-  bookings: Booking[];
   expenses: Expense[];
   expenseItems: ExpenseItem[];
   timeSettings: TimeSettings | null;
@@ -190,7 +189,7 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs, expenses, expenseItems, bookings,
+    costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs, expenses, expenseItems,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -208,13 +207,12 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<TimerLog>("timer_logs", "started_at"),
       all<Expense>("expenses", "date"),
       all<ExpenseItem>("expense_items", "position"),
-      all<Booking>("bookings", "start_date"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
     submissions, timeSettings: timeSettings[0] ?? null, timerLogs,
-    expenses, expenseItems, bookings,
+    expenses, expenseItems,
   };
 }
 
@@ -1090,20 +1088,6 @@ export function totalsAcross(data: FinanceData, budgetIds: string[]) {
 
 /* ================= Xếp lịch & dự báo ================= */
 
-export type Booking = {
-  id: string;
-  namespace_id: string;
-  user_id: string;
-  service_id: string;
-  ticket_id: string | null;
-  start_date: string;
-  end_date: string;
-  hours_per_day: number;
-  is_tentative: boolean;
-  auto_track: boolean;
-  note: string | null;
-};
-
 /** Các ngày làm việc trong khoảng (bỏ cuối tuần và ngày lễ). */
 export function workdaysBetween(from: string, to: string): string[] {
   const out: string[] = [];
@@ -1118,100 +1102,93 @@ export function workdaysBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** Tổng giờ của một booking — giờ mỗi ngày nhân số ngày làm việc. */
-export function bookingHours(b: Booking): number {
-  return workdaysBetween(b.start_date, b.end_date).length * Number(b.hours_per_day);
-}
-
 /**
- * Số giờ đã xếp cho một người trong một ngày.
- * Booking tạm tính KHÔNG cộng vào — theo đúng Productive, để không làm
- * phồng khối lượng công việc khi việc còn chưa chắc.
- */
-export function scheduledHoursOn(
-  bookings: Booking[],
-  userId: string,
-  date: string,
-  includeTentative = false,
-): number {
-  return bookings
-    .filter(
-      (b) =>
-        b.user_id === userId &&
-        b.start_date <= date &&
-        b.end_date >= date &&
-        (includeTentative || !b.is_tentative),
-    )
-    .reduce((a, b) => {
-      const wd = new Date(date).getDay();
-      if (wd === 0 || wd === 6 || VN_HOLIDAYS.has(date)) return a;
-      return a + Number(b.hours_per_day);
-    }, 0);
-}
-
-/**
- * Dự báo tiền theo lịch đã xếp, từ ngày mai trở đi.
+ * Dự báo tiền theo CÔNG VIỆC đã ước tính, từ ngày mai trở đi.
  *
- * Với mỗi ngày công đã xếp:
+ * Cách Workload của Productive: rải đều số giờ ước tính của công việc
+ * giữa ngày bắt đầu và hạn chót, chia cho số ngày làm việc.
+ *
+ *   Ước tính 40h, 01/08 → 15/08 (11 ngày làm việc) → 3.6h mỗi ngày
+ *
+ * Với mỗi ngày công dự kiến:
  *   doanh thu += giờ x đơn giá bán   (chỉ hạng mục tính theo giờ)
- *   chi phí   += giờ x giá vốn người đó
+ *   chi phí   += giờ x giá vốn người phụ trách
  *
- * Booking chắc chắn được xử lý TRƯỚC booking tạm tính. Quan trọng khi
- * hạng mục có trần: nếu booking chắc chắn đã ăn hết trần thì booking tạm
- * tính cho doanh thu bằng 0.
+ * Công việc thiếu ước tính giờ, thiếu ngày, hoặc chưa gán hạng mục thì
+ * không vào dự báo — vì không đủ dữ kiện để tính.
  */
 export function forecastByDate(
   data: Pick<
     FinanceData,
-    "bookings" | "services" | "budgets" | "costRates" | "budgetCostRates" | "overhead"
+    "services" | "budgets" | "costRates" | "budgetCostRates" | "overhead" | "timeEntries"
   >,
+  tickets: ForecastTicket[],
   budgetId?: string,
 ): Map<string, { revenue: number; cost: number; hours: number }> {
   const out = new Map<string, { revenue: number; cost: number; hours: number }>();
   const today = isoDate(new Date());
-
   const svcOf = new Map(data.services.map((s) => [s.id, s]));
-  const relevant = data.bookings
-    .filter((b) => {
-      const s = svcOf.get(b.service_id);
-      if (!s) return false;
-      return !budgetId || s.budget_id === budgetId;
-    })
-    // chắc chắn trước, tạm tính sau
-    .sort((a, b) => Number(a.is_tentative) - Number(b.is_tentative));
 
-  for (const b of relevant) {
-    const s = svcOf.get(b.service_id)!;
+  for (const t of tickets) {
+    if (!t.budget_service_id || !t.estimate_hours || !t.start_date || !t.deadline) continue;
+    const s = svcOf.get(t.budget_service_id);
+    if (!s) continue;
+    if (budgetId && s.budget_id !== budgetId) continue;
+
+    const days = workdaysBetween(t.start_date, t.deadline).filter((d) => d > today);
+    if (!days.length) continue;
+
+    // Trừ phần đã log để không đếm hai lần.
+    const logged =
+      data.timeEntries
+        .filter((e) => e.ticket_id === t.id)
+        .reduce((a, e) => a + e.minutes, 0) / 60;
+    const remain = Math.max(0, Number(t.estimate_hours) - logged);
+    if (!remain) continue;
+
+    const perDay = remain / days.length;
     const budget = data.budgets.find((x) => x.id === s.budget_id);
     const isInternal = budget?.is_internal ?? false;
+    // Người phụ trách đầu tiên; không có thì lấy giá vốn trung bình.
+    const uid = t.assignee_id;
 
-    for (const day of workdaysBetween(b.start_date, b.end_date)) {
-      if (day <= today) continue; // quá khứ đã có dòng giờ thật
-      const hours = Number(b.hours_per_day);
-      const rate = costRateFor(data as FinanceData, b.user_id, {
-        onDate: day,
-        budgetId: s.budget_id,
-        isInternal,
-      });
-      const rev = s.billing_type === "tm" ? hours * Number(s.price) : 0;
-
+    for (const day of days) {
+      const rate = uid
+        ? costRateFor(data as FinanceData, uid, {
+            onDate: day,
+            budgetId: s.budget_id,
+            isInternal,
+          }).total
+        : 0;
+      const rev = s.billing_type === "tm" ? perDay * Number(s.price) : 0;
       const cur = out.get(day) ?? { revenue: 0, cost: 0, hours: 0 };
       cur.revenue += rev;
-      cur.cost += hours * rate.total;
-      cur.hours += hours;
+      cur.cost += perDay * rate;
+      cur.hours += perDay;
       out.set(day, cur);
     }
   }
   return out;
 }
 
+/** Dữ liệu công việc cần cho dự báo. */
+export type ForecastTicket = {
+  id: string;
+  budget_service_id: string | null;
+  start_date: string | null;
+  deadline: string | null;
+  estimate_hours: number | null;
+  assignee_id: string | null;
+};
+
 /** Khi nào ngân sách cạn theo dự báo — trả về ngày, hoặc null nếu không cạn. */
 export function budgetRunsOutOn(
   data: FinanceData,
+  tickets: ForecastTicket[],
   budgetId: string,
 ): { date: string; overBy: number } | null {
   const s = budgetSummary(data, budgetId);
-  const fc = forecastByDate(data, budgetId);
+  const fc = forecastByDate(data, tickets, budgetId);
   let used = s.usedBudget;
   for (const day of [...fc.keys()].sort()) {
     used += fc.get(day)!.revenue;

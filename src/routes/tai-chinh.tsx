@@ -7,7 +7,6 @@ import {
   Building2,
   Clock,
   Coins,
-  CalendarRange,
   Receipt,
   Users2,
   FileSignature,
@@ -24,7 +23,6 @@ import { CostRatePanel } from "@/components/heye/CostRatePanel";
 import { MyTime } from "@/components/heye/MyTime";
 import { CompanyTime } from "@/components/heye/CompanyTime";
 import { Expenses } from "@/components/heye/Expenses";
-import { ResourcePlanner } from "@/components/heye/ResourcePlanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -101,7 +99,6 @@ const NAV = [
   { id: "time", label: "Giờ của tôi", icon: Clock },
   { id: "company", label: "Giờ toàn công ty", icon: Users2 },
   { id: "expenses", label: "Chi phí", icon: Receipt },
-  { id: "planner", label: "Xếp lịch", icon: CalendarRange },
 ] as const;
 type Tab = (typeof NAV)[number]["id"];
 
@@ -164,11 +161,16 @@ function TaiChinh() {
         ) : tab === "types" ? (
           <TypesPanel data={data} nsId={nsId} />
         ) : tab === "budgets" ? (
-          <BudgetsPanel data={data} nsId={nsId} users={ws?.users ?? []} />
+          <BudgetsPanel
+            data={data}
+            nsId={nsId}
+            users={ws?.users ?? []}
+            tickets={ws?.tickets ?? []}
+            assignees={ws?.assignees ?? []}
+          />
         ) : tab === "cost" ? (
           <CostPanel data={data} users={ws?.users ?? []} nsId={nsId} />
-        ) : tab === "planner" ? (
-          <PlannerPanel data={data} users={ws?.users ?? []} nsId={nsId} />
+
         ) : tab === "expenses" ? (
           <ExpensePanel data={data} users={ws?.users ?? []} nsId={nsId} />
         ) : tab === "company" ? (
@@ -1131,10 +1133,14 @@ function BudgetsPanel({
   data,
   nsId,
   users,
+  tickets,
+  assignees,
 }: {
   data: FinanceData;
   nsId: string;
   users: User[];
+  tickets: Ticket[];
+  assignees: { ticket_id: string; user_id: string }[];
 }) {
   const save = useSave();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1143,12 +1149,27 @@ function BudgetsPanel({
 
   const current = openId ? data.budgets.find((b) => b.id === openId) : null;
 
+  // Công việc kèm người phụ trách đầu tiên — cơ sở dự báo.
+  const forecastTickets = useMemo(
+    () =>
+      tickets.map((t) => ({
+        id: t.id,
+        budget_service_id: t.budget_service_id,
+        start_date: t.start_date,
+        deadline: t.deadline,
+        estimate_hours: t.estimate_hours,
+        assignee_id: assignees.find((a) => a.ticket_id === t.id)?.user_id ?? null,
+      })),
+    [tickets, assignees],
+  );
+
   if (current) {
     return (
       <BudgetDetail
         budget={current}
         data={data}
         users={users}
+        forecastTickets={forecastTickets}
         onBack={() => setOpenId(null)}
         onAddService={(v) => save.mutate(() => insertRow("budget_services", v))}
         onEditService={(id, v) => save.mutate(() => updateRow("budget_services", id, v))}
@@ -1623,30 +1644,6 @@ function ExpensePanel({
           }),
         )
       }
-    />
-  );
-}
-
-/* ================= Xếp lịch ================= */
-
-function PlannerPanel({
-  data,
-  users,
-  nsId,
-}: {
-  data: FinanceData;
-  users: User[];
-  nsId: string;
-}) {
-  const save = useSave();
-  return (
-    <ResourcePlanner
-      data={data}
-      users={users}
-      nsId={nsId}
-      onCreate={(v) => save.mutate(() => insertRow("bookings", v))}
-      onUpdate={(id, v) => save.mutate(() => updateRow("bookings", id, v))}
-      onDelete={(id) => save.mutate(() => deleteRow("bookings", id))}
     />
   );
 }

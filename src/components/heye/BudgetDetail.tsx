@@ -52,6 +52,7 @@ import {
   type FinanceData,
   costRateFor,
   effectivePrice,
+  type ForecastTicket,
 } from "@/lib/finance-data";
 import type { User } from "@/lib/heye-data";
 
@@ -95,12 +96,14 @@ export function BudgetDetail({
   onDeleteSection,
   onEditBudget,
   users,
+  forecastTickets,
   onSaveBudgetCostRate,
   onRemoveBudgetCostRate,
 }: {
   budget: Budget;
   data: FinanceData;
   users: User[];
+  forecastTickets: ForecastTicket[];
   onBack: () => void;
   onAddService: (v: Record<string, unknown>) => void;
   onEditService: (id: string, v: Record<string, unknown>) => void;
@@ -221,7 +224,7 @@ export function BudgetDetail({
 
       {view === "overview" && (
         <div className="mt-4">
-          <BudgetOverview data={data} budgetId={budget.id} />
+          <BudgetOverview data={data} budgetId={budget.id} tickets={forecastTickets} />
         </div>
       )}
 

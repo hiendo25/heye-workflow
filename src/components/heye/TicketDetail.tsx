@@ -1,5 +1,18 @@
 import { useState } from "react";
-import { Ban, Clock, Coins, FileSignature, Folder, Play, Plus, Square, Tag as TagIcon, Trash2, X } from "lucide-react";
+import {
+  Ban,
+  CalendarRange,
+  Clock,
+  Coins,
+  FileSignature,
+  Folder,
+  Play,
+  Plus,
+  Square,
+  Tag as TagIcon,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,6 +40,7 @@ import {
   money,
   parseDuration,
   whyCannotTrack,
+  workdaysBetween,
   UNIT_LABEL,
   type Budget,
   type BudgetService,
@@ -56,6 +70,7 @@ export function TicketDetail({
   onStartTimer,
   onStopTimer,
   onStartFresh,
+  onSavePlan,
   allUsers,
   nsId,
 }: {
@@ -74,6 +89,8 @@ export function TicketDetail({
   onStopTimer: (entryId: string) => void;
   /** Bấm giờ khi chưa có dòng nào — tự tạo dòng 0 phút rồi chạy. */
   onStartFresh: (v: Record<string, unknown>) => void;
+  /** Lưu ước tính giờ và khoảng ngày — cơ sở để dự báo. */
+  onSavePlan: (v: Record<string, unknown>) => void;
   allUsers: User[];
   nsId: string;
 }) {
@@ -193,6 +210,8 @@ export function TicketDetail({
               )}
             </section>
 
+            <PlanSection ticket={ticket} logged={logged} onSave={onSavePlan} />
+
             <section className="rounded-xl border border-line bg-surface">
               <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
                 <Clock size={14} className="text-ink-3" />
@@ -307,6 +326,7 @@ export function TicketDetail({
                 </div>
               )}
             </section>
+
           </div>
 
           {/* --- Cột phải --- */}
@@ -646,3 +666,129 @@ const fmtDay = (v: string) => {
   const [y, m, d] = v.split("-");
   return `${d}/${m}/${y}`;
 };
+
+/**
+ * Kế hoạch của công việc: ước tính giờ + khoảng ngày.
+ *
+ * Đây là cơ sở dự báo — hệ thống rải đều số giờ ước tính giữa ngày bắt đầu
+ * và hạn chót để biết mỗi ngày tốn bao nhiêu, từ đó vẽ đường dự báo trên
+ * biểu đồ hợp đồng. Thiếu một trong ba thì công việc không vào dự báo.
+ */
+function PlanSection({
+  ticket,
+  logged,
+  onSave,
+}: {
+  ticket: Ticket;
+  logged: number;
+  onSave: (v: Record<string, unknown>) => void;
+}) {
+  const [est, setEst] = useState(ticket.estimate_hours ? String(ticket.estimate_hours) : "");
+  const [start, setStart] = useState(ticket.start_date ?? "");
+  const [due, setDue] = useState(ticket.deadline?.slice(0, 10) ?? "");
+  const [dirty, setDirty] = useState(false);
+
+  const days = start && due && due >= start ? workdaysBetween(start, due).length : 0;
+  const estH = Number(est || 0);
+  const perDay = days ? estH / days : 0;
+  const loggedH = logged / 60;
+  const overrun = estH > 0 && loggedH > estH;
+
+  const touch = <T,>(fn: (v: T) => void) => (v: T) => {
+    fn(v);
+    setDirty(true);
+  };
+
+  return (
+    <section className="rounded-xl border border-line bg-surface p-4">
+      <div className="flex items-center gap-2">
+        <CalendarRange size={14} className="text-ink-3" />
+        <h3 className="text-[12.5px] font-bold">Kế hoạch</h3>
+        <div className="flex-1" />
+        {dirty && (
+          <Button
+            size="sm"
+            onClick={() => {
+              onSave({
+                estimate_hours: est ? Number(est) : null,
+                start_date: start || null,
+                deadline: due || null,
+              });
+              setDirty(false);
+            }}
+          >
+            Lưu
+          </Button>
+        )}
+      </div>
+      <p className="mt-0.5 text-[11.5px] text-ink-3">
+        Hệ thống rải đều số giờ ước tính trong khoảng ngày để dự báo chi phí và doanh thu.
+      </p>
+
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <label className="block">
+          <span className="mb-1 block text-[11.5px] text-ink-2">Ước tính (giờ)</span>
+          <Input
+            className="num h-8"
+            inputMode="decimal"
+            value={est}
+            placeholder="40"
+            onChange={(e) => touch(setEst)(e.target.value.replace(/[^\d.]/g, ""))}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11.5px] text-ink-2">Bắt đầu</span>
+          <Input
+            type="date"
+            className="h-8"
+            value={start}
+            onChange={(e) => touch(setStart)(e.target.value)}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11.5px] text-ink-2">Hạn chót</span>
+          <Input
+            type="date"
+            className="h-8"
+            value={due}
+            onChange={(e) => touch(setDue)(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {estH > 0 && days > 0 && (
+        <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[12px]">
+          <div className="flex justify-between py-0.5">
+            <span className="text-ink-2">{days} ngày làm việc</span>
+            <span className="num">{perDay.toFixed(1)}h mỗi ngày</span>
+          </div>
+          <div className="flex justify-between py-0.5">
+            <span className="text-ink-2">Đã làm</span>
+            <span className={`num ${overrun ? "font-semibold text-bad" : ""}`}>
+              {loggedH.toFixed(1)}h / {estH}h
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
+            <div
+              className={`h-full rounded-full ${
+                overrun ? "bg-bad" : loggedH / estH > 0.8 ? "bg-warn" : "bg-good"
+              }`}
+              style={{ width: `${Math.min(100, (loggedH / estH) * 100)}%` }}
+            />
+          </div>
+          {overrun && (
+            <p className="mt-1.5 text-[11px] text-bad">
+              Đã vượt ước tính {(loggedH - estH).toFixed(1)}h — phần vượt vẫn tốn lương.
+            </p>
+          )}
+        </div>
+      )}
+
+      {(!estH || !days) && (
+        <p className="mt-2 rounded bg-warn-soft px-2.5 py-1.5 text-[11.5px] text-warn">
+          Thiếu ước tính giờ hoặc khoảng ngày nên công việc này chưa vào dự báo.
+        </p>
+      )}
+    </section>
+  );
+}
