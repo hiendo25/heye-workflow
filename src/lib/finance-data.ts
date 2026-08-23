@@ -164,6 +164,7 @@ export type FinanceData = {
   costRates: CostRate[];
   budgetCostRates: BudgetCostRate[];
   overhead: OverheadSettings | null;
+  timeEntries: TimeEntry[];
 };
 
 type Query = {
@@ -183,7 +184,7 @@ async function all<T>(table: string, order?: string): Promise<T[]> {
 export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead,
+    costRates, budgetCostRates, overhead, timeEntries,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -195,10 +196,11 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<CostRate>("cost_rates", "start_date"),
       all<BudgetCostRate>("budget_cost_rates"),
       all<OverheadSettings>("overhead_settings"),
+      all<TimeEntry>("time_entries", "date"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
-    costRates, budgetCostRates, overhead: overhead[0] ?? null,
+    costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
   };
 }
 
@@ -496,4 +498,100 @@ export function costRateFor(
   const base = hourlyCost(def, opts?.onDate);
   const add = def.add_overhead ? oh : 0;
   return { base, overhead: add, total: base + add, source: "default" };
+}
+
+/* ================= Ghi nhận giờ ================= */
+
+export type TimeEntry = {
+  id: string;
+  namespace_id: string;
+  user_id: string;
+  service_id: string;
+  ticket_id: string | null;
+  date: string;
+  minutes: number;
+  billable_minutes: number;
+  note: string | null;
+  cost_rate_snapshot: number;
+  approved_at: string | null;
+  approved_by: string | null;
+};
+
+/**
+ * Đọc số phút từ nhiều kiểu gõ, theo cách Productive chấp nhận:
+ *   "8" hoặc "8h"     -> 480 phút
+ *   "0.5" hoặc "30m"  -> 30 phút
+ *   "1h30" / "1:30"   -> 90 phút
+ *   "145m"            -> 145 phút
+ * Số trần dưới 20 hiểu là giờ, từ 20 trở lên hiểu là phút — vì không ai
+ * làm 45 giờ một ngày, nhưng 45 phút thì bình thường.
+ */
+export function parseDuration(input: string): number {
+  const s = input.trim().toLowerCase().replace(/,/g, ".");
+  if (!s) return 0;
+
+  const hm = s.match(/^(\d+)\s*[h:]\s*(\d+)m?$/);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+
+  const h = s.match(/^(\d+(?:\.\d+)?)\s*(h|hour|hours|giờ|gio)$/);
+  if (h) return Math.round(Number(h[1]) * 60);
+
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|phút|phut)$/);
+  if (m) return Math.round(Number(m[1]));
+
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  if (n < 20) return Math.round(n * 60);
+  return Math.round(n);
+}
+
+/** 90 -> "1:30" */
+export function fmtDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
+/** 90 -> "1h30" (gọn hơn, dùng trong câu chữ) */
+export function fmtDurationShort(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m}m`;
+  return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
+/** Chi phí một dòng giờ — luôn dùng giá vốn đã chụp lúc log. */
+export function entryCost(e: TimeEntry): number {
+  return (e.minutes / 60) * Number(e.cost_rate_snapshot);
+}
+
+/**
+ * Doanh thu một dòng giờ.
+ * Chỉ tính phần billable, và chỉ khi hạng mục có tính tiền.
+ * Hạng mục trọn gói không tính theo giờ — doanh thu đã cố định ở hợp đồng.
+ */
+export function entryRevenue(e: TimeEntry, service: BudgetService | undefined): number {
+  if (!service || service.billing_type !== "tm") return 0;
+  return (e.billable_minutes / 60) * Number(service.price);
+}
+
+export const WEEKDAY_LABEL = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+/** Danh sách 7 ngày của tuần chứa `d`, bắt đầu từ thứ Hai. */
+export function weekDays(d: Date): Date[] {
+  const day = d.getDay();
+  const back = day === 0 ? 6 : day - 1;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - back);
+  return Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(mon);
+    x.setDate(mon.getDate() + i);
+    return x;
+  });
+}
+
+export function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
 }

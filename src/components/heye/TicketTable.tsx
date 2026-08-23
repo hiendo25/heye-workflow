@@ -35,7 +35,15 @@ function Avatars({ users }: { users: User[] }) {
   );
 }
 
-export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[] }) {
+export function TicketTable({
+  statuses,
+  rows,
+  onOpen,
+}: {
+  statuses: Status[];
+  rows: Row[];
+  onOpen?: (ticketId: string) => void;
+}) {
   const groupsWithRows = statuses
     .map((s) => ({ status: s, items: rows.filter((r) => r.ticket.status_id === s.id) }))
     .filter((g) => g.items.length > 0);
@@ -79,7 +87,8 @@ export function TicketTable({ statuses, rows }: { statuses: Status[]; rows: Row[
               {items.map((r) => (
                 <tr
                   key={r.ticket.id}
-                  className="border-b border-line/70 transition-colors hover:bg-brand-soft/40"
+                  onClick={() => onOpen?.(r.ticket.id)}
+                  className="cursor-pointer border-b border-line/70 transition-colors hover:bg-brand-soft/40"
                 >
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">

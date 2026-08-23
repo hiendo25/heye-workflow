@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, ChevronDown } from "lucide-react";
 import { AppShell } from "@/components/heye/AppShell";
 import { Sidebar } from "@/components/heye/Sidebar";
 import { TicketTable, type Row } from "@/components/heye/TicketTable";
+import { TicketDetail } from "@/components/heye/TicketDetail";
 import { buildTree, findNode, workspaceQuery, type TreeNode } from "@/lib/heye-data";
-import { financeQuery } from "@/lib/finance-data";
+import { financeQuery, updateRow } from "@/lib/finance-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,6 +34,19 @@ const FILTERS = ["Trạng thái", "Người phụ trách", "Tag", "Độ ưu ti�
 function Index() {
   const { data } = useQuery(workspaceQuery);
   const { data: fin } = useQuery(financeQuery);
+  const qc = useQueryClient();
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  // Gán hạng mục cho công việc. Lưu xong nạp lại cả hai nguồn dữ liệu vì
+  // cột Hạng mục trong bảng đọc từ workspace, còn chi tiết đọc từ finance.
+  const setService = useMutation({
+    mutationFn: async (v: { id: string; serviceId: string | null }) =>
+      updateRow("tickets", v.id, { budget_service_id: v.serviceId }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["heye-workspace"] });
+      void qc.invalidateQueries({ queryKey: ["finance"] });
+    },
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tree = useMemo<TreeNode[]>(() => (data ? buildTree(data) : []), [data]);
@@ -89,6 +103,15 @@ function Index() {
         })(),
       }));
   }, [data, fin, selected]);
+
+  // Công việc đang mở + dự án chứa nó (để lọc hạng mục theo hợp đồng của dự án).
+  const open = useMemo(() => {
+    if (!openId || !data) return null;
+    const row = rows.find((r) => r.ticket.id === openId);
+    if (!row) return null;
+    const grp = data.groups.find((g) => g.id === row.ticket.group_id);
+    return { ...row, projectId: grp?.project_id ?? null };
+  }, [openId, rows, data]);
 
   const title = selected ? selected.name : "Việc của tôi";
   const breadcrumb = selected
@@ -147,9 +170,25 @@ function Index() {
           </div>
 
           <div className="mt-3 pb-8">
-            <TicketTable statuses={data?.statuses ?? []} rows={rows} />
+            <TicketTable statuses={data?.statuses ?? []} rows={rows} onOpen={setOpenId} />
           </div>
         </main>
+
+        {open && fin && (
+          <TicketDetail
+            ticket={open.ticket}
+            status={data?.statuses.find((s) => s.id === open.ticket.status_id)}
+            users={open.users}
+            tags={open.tags}
+            groupName={open.groupName}
+            projectId={open.projectId}
+            data={fin}
+            onClose={() => setOpenId(null)}
+            onSetService={(serviceId) =>
+              setService.mutate({ id: open.ticket.id, serviceId })
+            }
+          />
+        )}
     </AppShell>
   );
 }
