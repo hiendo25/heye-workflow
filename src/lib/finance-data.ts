@@ -136,10 +136,21 @@ export type BudgetCostRate = {
 export type OverheadSettings = {
   id: string;
   namespace_id: string;
-  monthly_cost: number;
-  monthly_hours: number;
+  /** Thuê văn phòng, điện nước, thiết bị, bản quyền dùng chung. */
+  facility_cost: number;
+  /** Tổng giờ làm việc của cả công ty trong tháng. */
+  total_hours: number;
+  /** Giờ làm cho khách — không tính giờ nội bộ và nghỉ phép. */
+  client_hours: number;
+  /** Chi phí nội bộ: giờ nội bộ + expense nội bộ + nghỉ phép. */
+  internal_cost: number;
+  internal_is_auto: boolean;
   is_enabled: boolean;
   note: string | null;
+  /** @deprecated giữ để không vỡ dữ liệu cũ */
+  monthly_cost: number;
+  /** @deprecated */
+  monthly_hours: number;
 };
 
 export type FinanceData = {
@@ -399,12 +410,38 @@ export function periodCapacity(r: CostRate, onDate?: string): number {
 }
 
 /**
- * Chi phí gián tiếp phân bổ lên mỗi giờ làm việc.
- * Mặt bằng, điện nước, HR, kế toán — không gắn dự án nào nhưng vẫn phải trả.
+ * Chi phí gián tiếp mỗi giờ, tách làm hai phần theo cách Productive tính.
+ *
+ *   Mặt bằng mỗi giờ = Chi phí mặt bằng / TỔNG giờ làm việc
+ *   Nội bộ mỗi giờ   = Chi phí nội bộ   / Giờ làm CHO KHÁCH
+ *
+ * Mẫu số khác nhau có chủ đích: ai làm gì cũng ngồi văn phòng nên mặt bằng
+ * chia cho tổng giờ; còn chi phí nội bộ chỉ có giờ làm khách mới gánh được,
+ * vì đó là phần duy nhất sinh ra doanh thu.
  */
-export function overheadPerHour(o: OverheadSettings | null): number {
-  if (!o || !o.is_enabled || !o.monthly_hours) return 0;
-  return Number(o.monthly_cost) / Number(o.monthly_hours);
+export function overheadBreakdown(o: OverheadSettings | null): {
+  facility: number;
+  internal: number;
+  total: number;
+} {
+  if (!o || !o.is_enabled) return { facility: 0, internal: 0, total: 0 };
+  const facility = Number(o.total_hours) ? Number(o.facility_cost) / Number(o.total_hours) : 0;
+  const internal = Number(o.client_hours) ? Number(o.internal_cost) / Number(o.client_hours) : 0;
+  return { facility, internal, total: facility + internal };
+}
+
+/**
+ * Chi phí gián tiếp áp cho một giờ.
+ *
+ * Hợp đồng KHÁCH   -> cộng đủ mặt bằng + nội bộ
+ * Hợp đồng NỘI BỘ  -> chỉ cộng mặt bằng
+ *
+ * Nếu hợp đồng nội bộ cộng cả phần nội bộ thì thành tính trùng: bản thân
+ * giờ nội bộ chính là thứ tạo ra chi phí nội bộ.
+ */
+export function overheadPerHour(o: OverheadSettings | null, isInternal = false): number {
+  const b = overheadBreakdown(o);
+  return isInternal ? b.facility : b.total;
 }
 
 /** Bản giá vốn có hiệu lực tại một ngày (nằm trong khoảng start..end). */
@@ -435,9 +472,9 @@ export function rateHistory(rates: CostRate[], userId: string): CostRate[] {
 export function costRateFor(
   data: Pick<FinanceData, "costRates" | "budgetCostRates" | "overhead">,
   userId: string,
-  opts?: { budgetId?: string; onDate?: string },
+  opts?: { budgetId?: string; onDate?: string; isInternal?: boolean },
 ): { base: number; overhead: number; total: number; source: "budget" | "default" | "none" } {
-  const oh = overheadPerHour(data.overhead);
+  const oh = overheadPerHour(data.overhead, opts?.isInternal ?? false);
   const def = rateOnDate(data.costRates, userId, opts?.onDate);
 
   if (opts?.budgetId) {

@@ -27,7 +27,7 @@ import {
   costRateFor,
   hourlyCost,
   money,
-  overheadPerHour,
+  overheadBreakdown,
   periodCapacity,
   rateHistory,
   rateOnDate,
@@ -73,7 +73,8 @@ export function CostRatePanel({
   const [openUser, setOpenUser] = useState<User | null>(null);
   const [ohOpen, setOhOpen] = useState(false);
 
-  const oh = overheadPerHour(data.overhead);
+  const ohb = overheadBreakdown(data.overhead);
+  const oh = ohb.total;
   const missing = users.filter((u) => !rateOnDate(data.costRates, u.id)).length;
 
   return (
@@ -87,11 +88,16 @@ export function CostRatePanel({
               thật của từng người. Đây là con số thứ hai để tính được lãi — giá bán gắn vào
               hạng mục, giá vốn gắn vào con người.
             </p>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded bg-surface-2 px-2 py-1 text-[11.5px] text-ink-3">
+              Chỉ quản trị viên xem được thông tin giá vốn. Phân quyền chưa làm.
+            </p>
           </div>
           <Button size="sm" variant="outline" onClick={() => setOhOpen(true)}>
             Chi phí gián tiếp:{" "}
             {data.overhead?.is_enabled ? (
-              <b className="num ml-1">{money(Math.round(oh))} đ/giờ</b>
+              <b className="num ml-1" title="mặt bằng + nội bộ">
+                {money(Math.round(oh))} đ/giờ
+              </b>
             ) : (
               <span className="ml-1 text-warn">chưa bật</span>
             )}
@@ -429,7 +435,7 @@ function UserRatesSheet({
         open={form !== null}
         user={user}
         value={form === "new" ? null : form}
-        overhead={overheadPerHour(data.overhead)}
+        overhead={overheadBreakdown(data.overhead).total}
         onClose={() => setForm(null)}
         onSubmit={(v) => {
           if (form === "new") onSaveRate({ ...v, namespace_id: nsId, user_id: user.id });
@@ -687,41 +693,102 @@ function OverheadDialog({
   onClose: () => void;
   onSubmit: (v: Record<string, unknown>) => void;
 }) {
-  const [cost, setCost] = useState(value ? String(value.monthly_cost) : "");
-  const [hours, setHours] = useState(value ? String(value.monthly_hours) : "");
+  const [facility, setFacility] = useState(value ? String(value.facility_cost || "") : "");
+  const [totalH, setTotalH] = useState(value ? String(value.total_hours || "") : "");
+  const [internal, setInternal] = useState(value ? String(value.internal_cost || "") : "");
+  const [clientH, setClientH] = useState(value ? String(value.client_hours || "") : "");
   const [on, setOn] = useState(value?.is_enabled ?? false);
-  const per = Number(hours) ? Number(cost) / Number(hours) : 0;
+
+  const perFacility = Number(totalH) ? Number(facility) / Number(totalH) : 0;
+  const perInternal = Number(clientH) ? Number(internal) / Number(clientH) : 0;
+  const perTotal = perFacility + perInternal;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Chi phí gián tiếp</DialogTitle>
           <DialogDescription>
-            Mặt bằng, điện nước, máy móc, HR, kế toán — không gắn vào dự án nào nhưng vẫn
-            phải trả. Phân bổ lên mỗi giờ làm việc để biên lợi nhuận phản ánh đúng thực tế.
+            Những chi phí không gắn vào dự án nào nhưng vẫn phải trả. Phân bổ lên mỗi giờ làm
+            việc để biên lợi nhuận phản ánh đúng thực tế.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <L label="Chi phí gián tiếp mỗi tháng" required>
-            <Input
-              className="num"
-              inputMode="numeric"
-              value={cost}
-              placeholder="450000000"
-              onChange={(e) => setCost(e.target.value.replace(/[^\d]/g, ""))}
-            />
-          </L>
-          <L label="Tổng giờ làm việc của công ty mỗi tháng" required>
-            <Input
-              className="num"
-              inputMode="numeric"
-              value={hours}
-              placeholder="4800"
-              onChange={(e) => setHours(e.target.value.replace(/[^\d]/g, ""))}
-            />
-          </L>
+        <div className="space-y-4">
+          {/* --- Phần 1: mặt bằng --- */}
+          <section className="rounded-lg border border-line p-3">
+            <h4 className="text-[12.5px] font-bold">Chi phí mặt bằng</h4>
+            <p className="mb-2.5 mt-0.5 text-[11.5px] text-ink-3">
+              Thuê văn phòng, điện nước, thiết bị, bản quyền phần mềm dùng chung. Chia cho{" "}
+              <b>tổng giờ</b> vì ai làm gì cũng ngồi văn phòng.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <L label="Chi phí mỗi tháng" required>
+                <Input
+                  className="num"
+                  inputMode="numeric"
+                  value={facility}
+                  placeholder="180000000"
+                  onChange={(e) => setFacility(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              </L>
+              <L label="Tổng giờ làm việc" required>
+                <Input
+                  className="num"
+                  inputMode="numeric"
+                  value={totalH}
+                  placeholder="1176"
+                  onChange={(e) => setTotalH(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              </L>
+            </div>
+            {perFacility > 0 && (
+              <div className="mt-2 flex justify-between text-[12px]">
+                <span className="text-ink-2">Mặt bằng mỗi giờ</span>
+                <span className="num font-semibold">{money(Math.round(perFacility))} đ</span>
+              </div>
+            )}
+          </section>
+
+          {/* --- Phần 2: nội bộ --- */}
+          <section className="rounded-lg border border-line p-3">
+            <h4 className="text-[12.5px] font-bold">Chi phí nội bộ</h4>
+            <p className="mb-2.5 mt-0.5 text-[11.5px] text-ink-3">
+              Giờ làm việc nội bộ, đào tạo, nghỉ phép — phần không ra tiền. Chia cho{" "}
+              <b>giờ làm cho khách</b>, vì chỉ phần đó mới sinh doanh thu để gánh.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <L label="Chi phí mỗi tháng">
+                <Input
+                  className="num"
+                  inputMode="numeric"
+                  value={internal}
+                  placeholder="60000000"
+                  onChange={(e) => setInternal(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              </L>
+              <L label="Giờ làm cho khách">
+                <Input
+                  className="num"
+                  inputMode="numeric"
+                  value={clientH}
+                  placeholder="900"
+                  onChange={(e) => setClientH(e.target.value.replace(/[^\d]/g, ""))}
+                />
+              </L>
+            </div>
+            {perInternal > 0 && (
+              <div className="mt-2 flex justify-between text-[12px]">
+                <span className="text-ink-2">Nội bộ mỗi giờ</span>
+                <span className="num font-semibold">{money(Math.round(perInternal))} đ</span>
+              </div>
+            )}
+            <p className="mt-2 rounded bg-surface-2 px-2 py-1.5 text-[11px] text-ink-3">
+              Tạm nhập tay. Sau khi có phần ghi nhận giờ, số này tự tính từ giờ log vào hợp
+              đồng nội bộ, chi phí nội bộ và ngày nghỉ phép.
+            </p>
+          </section>
+
           <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px]">
             <input
               type="checkbox"
@@ -732,14 +799,22 @@ function OverheadDialog({
             Cộng chi phí gián tiếp vào giá vốn
           </label>
 
-          {per > 0 && (
-            <div className="rounded-lg bg-brand-soft px-3 py-2">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[12.5px] text-ink-2">Phân bổ mỗi giờ</span>
-                <span className="num text-[15px] font-bold text-brand">
-                  {money(Math.round(per))} đ
+          {perTotal > 0 && (
+            <div className="rounded-lg bg-brand-soft px-3 py-2.5 text-[12.5px]">
+              <div className="flex justify-between text-ink-2">
+                <span>Hợp đồng khách — cộng cả hai</span>
+                <span className="num font-bold text-brand">
+                  {money(Math.round(perTotal))} đ/giờ
                 </span>
               </div>
+              <div className="mt-0.5 flex justify-between text-ink-2">
+                <span>Hợp đồng nội bộ — chỉ mặt bằng</span>
+                <span className="num font-semibold">{money(Math.round(perFacility))} đ/giờ</span>
+              </div>
+              <p className="mt-1.5 border-t border-brand/20 pt-1.5 text-[11px] text-ink-3">
+                Hợp đồng nội bộ không cộng phần nội bộ, vì làm vậy là tính trùng — bản thân
+                giờ nội bộ chính là thứ tạo ra chi phí đó.
+              </p>
             </div>
           )}
         </div>
@@ -749,12 +824,16 @@ function OverheadDialog({
             Huỷ
           </Button>
           <Button
-            disabled={!cost || !hours}
+            disabled={!facility || !totalH}
             onClick={() =>
               onSubmit({
-                monthly_cost: Number(cost),
-                monthly_hours: Number(hours),
+                facility_cost: Number(facility),
+                total_hours: Number(totalH),
+                internal_cost: Number(internal || 0),
+                client_hours: Number(clientH || totalH),
                 is_enabled: on,
+                monthly_cost: Number(facility),
+                monthly_hours: Number(totalH),
               })
             }
           >
