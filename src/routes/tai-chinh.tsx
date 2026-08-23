@@ -989,7 +989,11 @@ function BudgetsPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         data={data}
         onBack={() => setOpenId(null)}
         onAddService={(v) => save.mutate(() => insertRow("budget_services", v))}
+        onEditService={(id, v) => save.mutate(() => updateRow("budget_services", id, v))}
         onDeleteService={(id) => save.mutate(() => deleteRow("budget_services", id))}
+        onEditSection={(id, name) => save.mutate(() => updateRow("budget_sections", id, { name }))}
+        onDeleteSection={(id) => save.mutate(() => deleteRow("budget_sections", id))}
+        onEditBudget={(v) => save.mutate(() => updateRow("budgets", current.id, v))}
         onAddSection={(name) =>
           save.mutate(() =>
             insertRow("budget_sections", {
