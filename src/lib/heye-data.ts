@@ -58,12 +58,22 @@ export type Workspace = {
 };
 
 async function all<T>(table: string, order?: string): Promise<T[]> {
-  let q = supabase.from(table).select("*");
-  if (order) q = q.order(order, { ascending: true });
-  const { data, error } = await q;
+  const client = supabase as unknown as {
+    from: (t: string) => {
+      select: (s: string) => Promise<{ data: unknown; error: unknown }> & {
+        order: (
+          c: string,
+          o: { ascending: boolean },
+        ) => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const base = client.from(table).select("*");
+  const { data, error } = await (order ? base.order(order, { ascending: true }) : base);
   if (error) throw error;
   return (data ?? []) as T[];
 }
+
 
 export async function fetchWorkspace(): Promise<Workspace> {
   const [namespaces, projects, groups, statuses, users, tags, tickets, assignees, ticketTags] =
