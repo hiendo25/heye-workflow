@@ -88,40 +88,51 @@ create policy "public write" on public.rate_card_items  for all    using (true) 
 -- ============================================================
 do $$
 declare
-  ns   uuid;
-  bx   uuid; by uuid; sz uuid;
-  dev  uuid; qc uuid; pm uuid; uat uuid; ba uuid; ops uuid;
-  rc_std uuid; rc_bx uuid; rc_by uuid;
+  ns      uuid;
+  c_bx    uuid;
+  c_by    uuid;
+  c_sky   uuid;
+  st_dev  uuid;
+  st_qc   uuid;
+  st_pm   uuid;
+  st_uat  uuid;
+  st_ba   uuid;
+  st_ops  uuid;
+  rc_std  uuid;
+  rc_bx   uuid;
+  rc_by   uuid;
 begin
   select id into ns from public.namespaces order by created_at limit 1;
-  if ns is null then return; end if;
+  if ns is null then
+    raise exception 'Chưa có namespace nào — chạy migration gốc trước.';
+  end if;
 
   -- Khách hàng
   insert into public.client_companies (namespace_id, name, short_name, tax_id, contact_name, contact_email)
   values (ns,'Ngân hàng Thương mại X','Bank X','0100112233','Chị Hương','huong@bankx.vn')
-  returning id into bx;
+  returning id into c_bx;
 
   insert into public.client_companies (namespace_id, name, short_name, tax_id, contact_name, contact_email)
   values (ns,'Ngân hàng Thương mại Y','Bank Y','0100445566','Anh Tuấn','tuan@banky.vn')
-  returning id into by;
+  returning id into c_by;
 
   insert into public.client_companies (namespace_id, name, short_name, tax_id, contact_name, contact_email)
   values (ns,'Công ty CP Sky Realty','Sky Realty','0312778899','Anh Dũng','dung@skyrealty.vn')
-  returning id into sz;
+  returning id into c_sky;
 
   -- Loại dịch vụ (danh mục công ty)
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Phát triển','DEV','#2563EB',1) returning id into dev;
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Kiểm thử','QC','#7C3AED',2) returning id into qc;
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Quản lý dự án','PM','#0E9F6E',3) returning id into pm;
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Hỗ trợ UAT','UAT','#D97706',4) returning id into uat;
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Phân tích nghiệp vụ','BA','#DB2777',5) returning id into ba;
-  insert into public.service_types (namespace_id,name,code,color,position) values
-    (ns,'Vận hành hệ thống','OPS','#0891B2',6) returning id into ops;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Phát triển','DEV','#2563EB',1) returning id into st_dev;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Kiểm thử','QC','#7C3AED',2) returning id into st_qc;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Quản lý dự án','PM','#0E9F6E',3) returning id into st_pm;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Hỗ trợ UAT','UAT','#D97706',4) returning id into st_uat;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Phân tích nghiệp vụ','BA','#DB2777',5) returning id into st_ba;
+  insert into public.service_types (namespace_id,name,code,color,position)
+  values (ns,'Vận hành hệ thống','OPS','#0891B2',6) returning id into st_ops;
 
   -- Bảng giá chuẩn công ty (client_id NULL)
   insert into public.rate_cards (namespace_id, client_id, name, note)
@@ -129,26 +140,26 @@ begin
   returning id into rc_std;
 
   insert into public.rate_card_items (rate_card_id, service_type_id, unit, price, position) values
-    (rc_std, dev,'hour',600000,1), (rc_std, qc,'hour',400000,2),
-    (rc_std, pm ,'hour',800000,3), (rc_std, uat,'hour',450000,4),
-    (rc_std, ba ,'hour',700000,5), (rc_std, ops,'hour',500000,6);
+    (rc_std, st_dev,'hour',600000,1), (rc_std, st_qc,'hour',400000,2),
+    (rc_std, st_pm ,'hour',800000,3), (rc_std, st_uat,'hour',450000,4),
+    (rc_std, st_ba ,'hour',700000,5), (rc_std, st_ops,'hour',500000,6);
 
   -- Bảng giá riêng Bank X (khách lớn, giá cao hơn)
   insert into public.rate_cards (namespace_id, client_id, name, note)
-  values (ns, bx, 'Bảng giá Bank X 2026', 'Đàm phán tháng 12/2025, áp dụng cả năm 2026')
+  values (ns, c_bx, 'Bảng giá Bank X 2026', 'Đàm phán tháng 12/2025, áp dụng cả năm 2026')
   returning id into rc_bx;
 
   insert into public.rate_card_items (rate_card_id, service_type_id, unit, price, position) values
-    (rc_bx, dev,'hour',700000,1), (rc_bx, qc,'hour',450000,2),
-    (rc_bx, pm ,'hour',900000,3), (rc_bx, uat,'hour',500000,4),
-    (rc_bx, ba ,'hour',800000,5);
+    (rc_bx, st_dev,'hour',700000,1), (rc_bx, st_qc,'hour',450000,2),
+    (rc_bx, st_pm ,'hour',900000,3), (rc_bx, st_uat,'hour',500000,4),
+    (rc_bx, st_ba ,'hour',800000,5);
 
   -- Bảng giá riêng Bank Y (đàm phán mạnh, giá thấp hơn chuẩn)
   insert into public.rate_cards (namespace_id, client_id, name, note)
-  values (ns, by, 'Bảng giá Bank Y', 'Hợp đồng khung 3 năm, đổi lại giá thấp')
+  values (ns, c_by, 'Bảng giá Bank Y', 'Hợp đồng khung 3 năm, đổi lại giá thấp')
   returning id into rc_by;
 
   insert into public.rate_card_items (rate_card_id, service_type_id, unit, price, position) values
-    (rc_by, dev,'hour',550000,1), (rc_by, qc,'hour',380000,2),
-    (rc_by, pm ,'hour',750000,3), (rc_by, uat,'hour',420000,4);
+    (rc_by, st_dev,'hour',550000,1), (rc_by, st_qc,'hour',380000,2),
+    (rc_by, st_pm ,'hour',750000,3), (rc_by, st_uat,'hour',420000,4);
 end $$;
