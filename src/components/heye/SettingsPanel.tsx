@@ -21,12 +21,12 @@ export function SettingsPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(240px,340px)_minmax(0,1fr)] lg:gap-10">
+    <div className="mx-auto grid max-w-[1080px] gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-9">
       <div className="lg:pt-1">
         <h2 className="text-[17px] font-bold tracking-tight">{title}</h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">{description}</p>
       </div>
-      <div className="rounded-xl border border-line bg-surface">{children}</div>
+      <div className="h-fit rounded-xl border border-line bg-surface">{children}</div>
     </div>
   );
 }
