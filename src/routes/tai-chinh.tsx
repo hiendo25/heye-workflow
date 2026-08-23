@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/heye/AppShell";
 import { PanelFooter, PanelRow, SettingsPanel } from "@/components/heye/SettingsPanel";
 import { BudgetDetail } from "@/components/heye/BudgetDetail";
+import { EmptyState, ListToolbar } from "@/components/heye/BudgetChrome";
 import { CostRatePanel } from "@/components/heye/CostRatePanel";
 import { MyTime } from "@/components/heye/MyTime";
 import { CompanyTime } from "@/components/heye/CompanyTime";
@@ -1183,6 +1184,13 @@ function BudgetsPanel({
           )
         }
         onRemoveBudgetCostRate={(id) => save.mutate(() => deleteRow("budget_cost_rates", id))}
+        renderTab={(key) =>
+          key === "expenses" ? (
+            <ExpensePanel data={data} users={users} nsId={nsId} budgetId={current.id} />
+          ) : (
+            <BudgetTimeTab data={data} users={users} budgetId={current.id} />
+          )
+        }
         onAddSection={(name) =>
           save.mutate(() =>
             insertRow("budget_sections", {
@@ -1517,6 +1525,90 @@ function TimePanel({
   );
 }
 
+/** Phút -> "12:30", cách Productive hiển thị giờ trong mọi bảng. */
+function hm(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/* ================= Tab Giờ trong hợp đồng =================
+   Khác màn Giờ toàn công ty: ở đây là BẢNG PHẲNG lọc theo hợp đồng, cột
+   Người · Ngày · Hạng mục · Giờ làm · Giờ tính tiền · Ghi chú — đúng như
+   tab Time của Productive. Lưới tuần chỉ dùng ở màn toàn công ty. */
+
+function BudgetTimeTab({
+  data,
+  users,
+  budgetId,
+}: {
+  data: FinanceData;
+  users: User[];
+  budgetId: string;
+}) {
+  const svcIds = new Set(
+    data.services.filter((s) => s.budget_id === budgetId).map((s) => s.id),
+  );
+  const rows = data.timeEntries
+    .filter((e) => svcIds.has(e.service_id))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const totalMin = rows.reduce((a, e) => a + e.minutes, 0);
+  const billMin = rows.reduce((a, e) => a + (e.billable_minutes ?? 0), 0);
+
+  return (
+    <div className="space-y-3">
+      <ListToolbar fieldCount={6} filterCount={1} />
+      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+        {rows.length === 0 ? (
+          <EmptyState hint="Chưa ai ghi giờ vào hợp đồng này." onReset={() => undefined} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-line text-left text-[12px] font-semibold text-ink-2">
+                  <th className="px-4 py-3">Người</th>
+                  <th className="px-4 py-3">Ngày</th>
+                  <th className="px-4 py-3">Hạng mục</th>
+                  <th className="px-4 py-3 text-right">Giờ làm</th>
+                  <th className="px-4 py-3 text-right">Giờ tính tiền</th>
+                  <th className="px-4 py-3">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((e) => {
+                  const u = users.find((x) => x.id === e.user_id);
+                  const sv = data.services.find((x) => x.id === e.service_id);
+                  return (
+                    <tr key={e.id} className="border-b border-line/60 last:border-0">
+                      <td className="px-4 py-2.5">{u?.full_name ?? "—"}</td>
+                      <td className="num px-4 py-2.5 text-ink-2">{e.date}</td>
+                      <td className="px-4 py-2.5">{sv?.name ?? "—"}</td>
+                      <td className="num px-4 py-2.5 text-right">{hm(e.minutes)}</td>
+                      <td className="num px-4 py-2.5 text-right">{hm(e.billable_minutes ?? 0)}</td>
+                      <td className="px-4 py-2.5 text-ink-2">{e.note ?? ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line bg-bg/50 font-semibold">
+                  <td className="px-4 py-2.5" colSpan={3}>
+                    TỔNG
+                  </td>
+                  <td className="num px-4 py-2.5 text-right">{hm(totalMin)}</td>
+                  <td className="num px-4 py-2.5 text-right">{hm(billMin)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ================= Giờ toàn công ty ================= */
 
 function CompanyPanel({
@@ -1577,10 +1669,12 @@ function ExpensePanel({
   data,
   users,
   nsId,
+  budgetId,
 }: {
   data: FinanceData;
   users: User[];
   nsId: string;
+  budgetId?: string | undefined;
 }) {
   const save = useSave();
   const approver = users[0]?.id ?? null;
@@ -1590,6 +1684,7 @@ function ExpensePanel({
       data={data}
       users={users}
       nsId={nsId}
+      budgetId={budgetId}
       onCreate={(expense, items) =>
         save.mutate(async () => {
           const created = await insertReturning("expenses", expense);

@@ -70,10 +70,13 @@ export function Expenses({
   onDelete,
   onSetStatus,
   onDuplicate,
+  budgetId,
 }: {
   data: FinanceData;
   users: User[];
   nsId: string;
+  /** Có giá trị khi màn này nằm trong tab Chi phí của một hợp đồng. */
+  budgetId?: string | undefined;
   onCreate: (expense: Record<string, unknown>, items: Record<string, unknown>[]) => void;
   onUpdate: (id: string, v: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
@@ -84,13 +87,20 @@ export function Expenses({
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<Expense | null>(null);
 
-  const list = data.expenses.filter((e) => filter === "all" || e.status === filter);
+  // Trong tab của hợp đồng thì chỉ lấy phiếu ghi vào hạng mục của hợp đồng đó.
+  const scoped = budgetId
+    ? data.expenses.filter((e) => {
+        const sv = data.services.find((x) => x.id === e.service_id);
+        return sv?.budget_id === budgetId;
+      })
+    : data.expenses;
+  const list = scoped.filter((e) => filter === "all" || e.status === filter);
   const canLog = expenseServices(data.services);
 
   const totals = useMemo(() => {
     let cost = 0;
     let billable = 0;
-    for (const e of data.expenses) {
+    for (const e of scoped) {
       if (e.status === "cancelled" || e.status === "changes_requested") continue;
       const t = expenseTotals(e, data.expenseItems);
       cost += t.net;
@@ -98,9 +108,9 @@ export function Expenses({
       if (e.status === "approved" && s?.billing_type !== "non_billable") billable += t.billable;
     }
     return { cost, billable, profit: billable - cost };
-  }, [data.expenses, data.expenseItems, data.services]);
+  }, [scoped, data.expenseItems, data.services]);
 
-  const pending = data.expenses.filter((e) => e.status === "submitted").length;
+  const pending = scoped.filter((e) => e.status === "submitted").length;
 
   return (
     <>
@@ -137,10 +147,10 @@ export function Expenses({
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
         <Chip on={filter === "all"} onClick={() => setFilter("all")}>
-          Tất cả ({data.expenses.length})
+          Tất cả ({scoped.length})
         </Chip>
         {(Object.keys(EXPENSE_STATUS_LABEL) as ExpenseStatus[]).map((st) => {
-          const n = data.expenses.filter((e) => e.status === st).length;
+          const n = scoped.filter((e) => e.status === st).length;
           if (!n) return null;
           return (
             <Chip key={st} on={filter === st} onClick={() => setFilter(st)}>

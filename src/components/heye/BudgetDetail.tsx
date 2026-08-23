@@ -11,9 +11,16 @@ import {
   Tag,
   Users2,
   Trash2,
+  Star,
+  X,
+  Eye,
+  Share2,
+  FileText,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BudgetOverview } from "@/components/heye/BudgetOverview";
+import { EmptyState, ListToolbar, StatusPills } from "@/components/heye/BudgetChrome";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -84,6 +91,23 @@ function RowIcon({ s }: { s: BudgetService }) {
   return <span className="inline-block h-2 w-2 rounded-full bg-good" aria-label="Theo giờ" />;
 }
 
+/**
+ * Bảy tab nằm TRONG hợp đồng, không phải ngoài menu chính.
+ * Trước đây tôi đẩy Chi phí và Giờ ra sidebar toàn cục — sai: ở Productive
+ * mọi thứ về một hợp đồng đều nằm trong chính hợp đồng đó.
+ */
+const TABS = [
+  { key: "overview", label: "Tổng quan" },
+  { key: "services", label: "Hạng mục" },
+  { key: "time", label: "Giờ" },
+  { key: "expenses", label: "Chi phí" },
+  { key: "invoices", label: "Hóa đơn" },
+  { key: "recurring", label: "Định kỳ" },
+  { key: "feed", label: "Hoạt động" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
 export function BudgetDetail({
   budget,
   data,
@@ -99,6 +123,7 @@ export function BudgetDetail({
   forecastTickets,
   onSaveBudgetCostRate,
   onRemoveBudgetCostRate,
+  renderTab,
 }: {
   budget: Budget;
   data: FinanceData;
@@ -114,6 +139,8 @@ export function BudgetDetail({
   onEditBudget: (v: Record<string, unknown>) => void;
   onSaveBudgetCostRate: (userId: string, rate: number) => void;
   onRemoveBudgetCostRate: (id: string) => void;
+  /** Nội dung cho tab Giờ / Chi phí, do trang cha lọc sẵn theo hợp đồng. */
+  renderTab?: ((key: "time" | "expenses") => React.ReactNode) | undefined;
 }) {
   const [adding, setAdding] = useState<string | null | "root">(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -122,7 +149,7 @@ export function BudgetDetail({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
-  const [view, setView] = useState<"overview" | "services">("overview");
+  const [view, setView] = useState<TabKey>("overview");
   const [cols, setCols] = useState<Set<ColKey>>(
     new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
   );
@@ -159,67 +186,92 @@ export function BudgetDetail({
         <ArrowLeft size={14} /> Tất cả hợp đồng
       </button>
 
-      {/* ---- Đầu trang ---- */}
+      {/* ---- Đầu trang: dựng theo ảnh Productive ----
+           Hàng 1: mã khách nhỏ + tên hợp đồng lớn + sao, bên phải là khoảng
+           ngày và bộ icon xem/chia sẻ/tài liệu/đóng.
+           Hàng 2: cặp pill trạng thái bên trái, 7 tab bên phải, nút tím cuối. */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-[11.5px] text-ink-3">{client?.name}</div>
-          <h1 className="mt-0.5 text-[20px] font-bold tracking-tight">{budget.name}</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                budget.status === "open" ? "bg-good-soft text-good" : "bg-line text-ink-3"
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  budget.status === "open" ? "bg-good" : "bg-ink-3"
-                }`}
-              />
-              {budget.status === "open" ? "ĐANG CHẠY" : "ĐÃ BÀN GIAO"}
-            </span>
-            {budget.code && <span className="num">{budget.code}</span>}
-            {budget.start_date && (
-              <span className="num">
-                {fmtDate(budget.start_date)} – {fmtDate(budget.end_date)}
-              </span>
-            )}
+          <div className="text-[12px] font-semibold text-brand">{client?.name}</div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <h1 className="text-[26px] font-bold tracking-tight">{budget.name}</h1>
+            <button type="button" className="text-ink-3 hover:text-warn" title="Đánh dấu">
+              <Star size={18} />
+            </button>
           </div>
         </div>
 
+        <div className="flex items-center gap-1">
+          {budget.start_date && (
+            <span className="num inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-ink hover:bg-line/50">
+              <CalendarDays size={15} className="text-ink-2" />
+              {fmtDate(budget.start_date)} – {fmtDate(budget.end_date)}
+            </span>
+          )}
+          <span className="mx-1 h-5 w-px bg-line" />
+          <button type="button" title="Xem như khách" className="rounded-lg p-1.5 text-ink-2 hover:bg-line/50">
+            <Eye size={17} />
+          </button>
+          <button type="button" title="Chia sẻ" className="rounded-lg p-1.5 text-ink-2 hover:bg-line/50">
+            <Share2 size={17} />
+          </button>
+          <button type="button" title="Hồ sơ" className="rounded-lg p-1.5 text-ink-2 hover:bg-line/50">
+            <FileText size={17} />
+          </button>
+          <button type="button" onClick={onBack} title="Đóng" className="rounded-lg p-1.5 text-ink-2 hover:bg-line/50">
+            <X size={19} />
+          </button>
+        </div>
+      </div>
+
+      {/* ---- Hàng trạng thái + tab ---- */}
+      <div className="mt-4 flex flex-wrap items-center gap-4 border-b border-line pb-3">
+        <StatusPills
+          status={budget.status}
+          onChange={(st) => onEditBudget({ status: st })}
+        />
+
+        <nav className="ml-auto flex flex-wrap items-center gap-0.5">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setView(t.key)}
+              className={`rounded-lg px-3 py-2 text-[14px] transition ${
+                view === t.key
+                  ? "bg-brand-soft font-semibold text-brand"
+                  : "text-ink-2 hover:bg-line/50 hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <Button
+          onClick={() => setAdding("root")}
+          className="gap-1.5 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
+        >
+          <Plus size={16} /> Hạng mục
+        </Button>
+
         <DropdownMenu>
-          <DropdownMenuTrigger className="rounded-md border border-line bg-surface p-1.5 text-ink-2 hover:border-brand hover:text-brand">
-            <MoreHorizontal size={16} />
+          <DropdownMenuTrigger className="rounded-lg p-1.5 text-ink-2 hover:bg-line/50 hover:text-ink">
+            <MoreHorizontal size={18} />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[200px]">
+          <DropdownMenuContent align="end" className="min-w-[210px]">
             <DropdownMenuItem onSelect={() => setEditBudget(true)}>
               <Pencil size={14} /> Sửa hợp đồng
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setCostOpen(true)}>
               <Users2 size={14} /> Giá vốn riêng hợp đồng
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem disabled>
               <Copy size={14} /> Nhân bản
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      {/* ---- Tab con: Tổng quan / Hạng mục ---- */}
-      <div className="mt-4 flex gap-1 border-b border-line">
-        {(["overview", "services"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            className={`-mb-px border-b-2 px-3 py-1.5 text-[13px] ${
-              view === v
-                ? "border-brand font-semibold text-brand"
-                : "border-transparent text-ink-2 hover:text-ink"
-            }`}
-          >
-            {v === "overview" ? "Tổng quan" : "Hạng mục bán"}
-          </button>
-        ))}
       </div>
 
       {view === "overview" && (
@@ -383,6 +435,36 @@ export function BudgetDetail({
       </div>
 
       </>
+      )}
+
+      {/* ---- Giờ và Chi phí: cùng dữ liệu toàn cục nhưng lọc theo hợp đồng ---- */}
+      {(view === "time" || view === "expenses") && (
+        <div className="mt-4">
+          {renderTab?.(view) ?? (
+            <div className="rounded-xl border border-line bg-surface">
+              <EmptyState hint="Chưa nối được dữ liệu cho tab này." />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---- Ba tab còn lại: dựng vỏ đúng bố cục, nội dung làm sau ---- */}
+      {(view === "invoices" || view === "recurring" || view === "feed") && (
+        <div className="mt-4 space-y-3">
+          <ListToolbar fieldCount={7} filterCount={1} />
+          <div className="rounded-xl border border-line bg-surface">
+            <EmptyState
+              hint={
+                view === "invoices"
+                  ? "Chưa có hóa đơn nào cho hợp đồng này."
+                  : view === "recurring"
+                    ? "Hợp đồng này không chạy theo chu kỳ."
+                    : "Chưa có hoạt động nào được ghi lại."
+              }
+              onReset={() => undefined}
+            />
+          </div>
+        </div>
       )}
 
       <ServiceDialog
