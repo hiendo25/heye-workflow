@@ -1054,11 +1054,6 @@ function RatesPanel({
           );
         })}
 
-        <PanelFooter>
-          <Button size="sm" onClick={() => setCardEdit("new")}>
-            Thêm bảng giá
-          </Button>
-        </PanelFooter>
       </SettingsPanel>
 
       <RateCardDialog
