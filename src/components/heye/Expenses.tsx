@@ -218,7 +218,7 @@ export function Expenses({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] border-collapse text-[13px]">
+            <table className="w-full min-w-[820px] border-collapse text-[13px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-ink-3">
                   <Th className="text-left">Hạng mục</Th>
@@ -250,7 +250,7 @@ export function Expenses({
                         <div className="truncate text-[12.5px] font-medium">{s?.name ?? "—"}</div>
                         <div className="truncate text-[11px] text-ink-3">{b?.name}</div>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="min-w-[190px] px-3 py-2">
                         <div className="font-medium text-ink">{e.reference}</div>
                         <div className="text-[11.5px] text-ink-3">
                           <span
@@ -603,6 +603,7 @@ function ExpenseDialog({
   // cột thanh toán ở bảng ngoài — "Chưa hoàn" thay vì "Chưa trả".
   const [reimbursable, setReimbursable] = useState(false);
   const [dueDate, setDueDate] = useState("");
+  const [currency, setCurrency] = useState("VND");
   const [markupType, setMarkupType] = useState<"percent" | "fixed">("percent");
   const [markup, setMarkup] = useState("0");
   const [attachment, setAttachment] = useState("");
@@ -689,6 +690,20 @@ function ExpenseDialog({
               </L>
               <L label="Hạn thanh toán">
                 <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </L>
+              {/* Cột currency có sẵn trong DB nhưng form chưa hỏi tới, nên mọi
+                  phiếu đều ngầm hiểu là VND. Thuê thầu nước ngoài là sai ngay. */}
+              <L label="Tiền tệ">
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VND">VND ₫</SelectItem>
+                    <SelectItem value="USD">USD $</SelectItem>
+                    <SelectItem value="EUR">EUR €</SelectItem>
+                  </SelectContent>
+                </Select>
               </L>
               <L label="Tệp đính kèm">
                 <Input
@@ -918,6 +933,7 @@ function ExpenseDialog({
                   date,
                   vendor: vendor.trim() || null,
                   is_reimbursed: reimbursable,
+                  currency,
                   due_date: dueDate || null,
                   attachment_name: attachment.trim() || null,
                   markup_type: markupType,

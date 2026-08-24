@@ -157,6 +157,9 @@ export function BudgetDetail({
   const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
   const [view, setView] = useState<TabKey>("overview");
+  // Panel phải chỉ mở sẵn ở tab Tổng quan. Các tab còn lại là BẢNG nhiều cột,
+  // panel 330px ăn mất chỗ khiến cột cuối bị che và số bị cắt cụt. Người dùng
+  // vẫn mở lại được bằng nút bên phải.
   const [sideOpen, setSideOpen] = useState(true);
   // Tạo hạng mục trống — khác đường rút từ bảng giá
   const [blankIn, setBlankIn] = useState<string | null>(null);
@@ -269,7 +272,10 @@ export function BudgetDetail({
             <button
               key={t.key}
               type="button"
-              onClick={() => setView(t.key)}
+              onClick={() => {
+                setView(t.key);
+                setSideOpen(t.key === "overview");
+              }}
               className={`rounded-lg px-3 py-2 text-[14px] transition ${
                 view === t.key
                   ? "bg-brand-soft font-semibold text-brand"
@@ -483,7 +489,10 @@ export function BudgetDetail({
 
       {/* ---- Giờ và Chi phí: cùng dữ liệu toàn cục nhưng lọc theo hợp đồng ---- */}
       {(view === "time" || view === "expenses") && (
-        <div className="mt-4">
+        // min-w-0 để bảng bên trong tôn trọng bề rộng còn lại sau panel phải.
+        // Thiếu nó thì flex item nở theo nội dung, overflow-x-auto vô tác dụng
+        // và cột cuối bị panel che mất.
+        <div className="mt-4 min-w-0">
           {renderTab?.(view) ?? (
             <div className="rounded-xl border border-line bg-surface">
               <EmptyState hint="Chưa nối được dữ liệu cho tab này." />
