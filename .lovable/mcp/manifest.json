@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "sdk_version": "0.27.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "heye-c-ng-vi-c-c-a-b-n",
+      "version": "0.1.0",
+      "title": "HeyE: Công việc Của Bạn"
+    },
+    "tools": [
+      {
+        "name": "list_projects",
+        "title": "Danh sách dự án",
+        "description": "List all projects (dự án) in the HeyE workspace with their id, name and colour.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_groups",
+        "title": "Danh sách thư mục & danh sách việc",
+        "description": "List the folders (thư mục) and lists (danh sách) of the workspace, optionally filtered by project id.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "description": "Only groups belonging to this project.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_tickets",
+        "title": "Danh sách công việc",
+        "description": "List work items (công việc) with status, priority and deadline. Filter by group (list/folder), status label or priority.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "group_id": {
+              "description": "Only tickets in this group (list).",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "priority": {
+              "description": "Priority filter.",
+              "type": "string",
+              "enum": [
+                "cao",
+                "thuong",
+                "thap"
+              ]
+            },
+            "search": {
+              "description": "Case-insensitive match on the title.",
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "description": "Max rows, default 50.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_ticket",
+        "title": "Chi tiết công việc",
+        "description": "Get one work item by its key (e.g. AIE-183), including status, tags and assignees.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Ticket key, e.g. AIE-183."
+            }
+          },
+          "required": [
+            "key"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_people",
+        "title": "Danh sách thành viên",
+        "description": "List workspace members (thành viên) and the tags used to label work items.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
