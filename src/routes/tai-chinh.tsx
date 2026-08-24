@@ -9,6 +9,7 @@ import {
   Coins,
   Receipt,
   Users2,
+  X,
   FileSignature,
   Layers,
   Pencil,
@@ -160,7 +161,7 @@ function TaiChinh() {
         ) : tab === "clients" ? (
           <ClientsPanel data={data} nsId={nsId} />
         ) : tab === "types" ? (
-          <TypesPanel data={data} nsId={nsId} />
+          <TypesPanel data={data} nsId={nsId} users={ws?.users ?? []} />
         ) : tab === "budgets" ? (
           <BudgetsPanel
             data={data}
@@ -332,10 +333,19 @@ function ClientDialog({
 
 /* ================= Loại dịch vụ ================= */
 
-function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
+function TypesPanel({
+  data,
+  nsId,
+  users,
+}: {
+  data: FinanceData;
+  nsId: string;
+  users: User[];
+}) {
   const save = useSave();
   const [edit, setEdit] = useState<ServiceType | "new" | null>(null);
   const [del, setDel] = useState<ServiceType | null>(null);
+  const [assign, setAssign] = useState<ServiceType | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const usage = useMemo(() => {
@@ -361,14 +371,22 @@ function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         }
       >
         {list.map((s) => {
-          const used = usage.get(s.id) ?? 0;
+          // Cột phụ hiển thị SỐ NGƯỜI được gán, giống Productive. Trước đây
+          // tôi hiện số bảng giá — chỉ số khác hẳn, không nói lên ai được
+          // chấm giờ vào loại này.
+          const people = data.typePeople.filter((p) => p.service_type_id === s.id).length;
           return (
             <PanelRow
               key={s.id}
               muted={s.is_archived}
-              meta={used ? `${used} bảng giá` : "chưa dùng"}
+              meta={people ? `${people} người` : "mọi người"}
               actions={[
                 { label: "Sửa", icon: <Pencil size={14} />, onSelect: () => setEdit(s) },
+                {
+                  label: "Gán nhân sự",
+                  icon: <Users2 size={14} />,
+                  onSelect: () => setAssign(s),
+                },
                 {
                   label: s.is_archived ? "Bỏ lưu trữ" : "Lưu trữ",
                   icon: s.is_archived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
@@ -429,6 +447,14 @@ function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         }
       />
 
+      <AssignPeopleDialog
+        type={assign}
+        users={users}
+        data={data}
+        nsId={nsId}
+        onClose={() => setAssign(null)}
+      />
+
       <DeleteMergeTypeDialog
         type={del}
         types={data.serviceTypes}
@@ -451,6 +477,118 @@ function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         }
       />
     </>
+  );
+}
+
+/**
+ * Gán nhân sự vào loại dịch vụ.
+ *
+ * Productive dùng cái này để HẠN CHẾ chấm giờ: bạn Kiểm thử chỉ log được vào
+ * loại Kiểm thử, không log nhầm sang Phát triển. Cột phụ trên danh sách hiện
+ * "N người" chính là số này — trước đây tôi hiện số bảng giá, một chỉ số khác
+ * hẳn, không nói lên ai được chấm giờ vào đâu.
+ *
+ * Không gán ai = mọi người đều log được. Đây là mặc định, vì tổ chức nhỏ
+ * thường không cần hạn chế, mà bắt gán trước mới dùng được thì quá phiền.
+ */
+function AssignPeopleDialog({
+  type,
+  users,
+  data,
+  nsId,
+  onClose,
+}: {
+  type: ServiceType | null;
+  users: User[];
+  data: FinanceData;
+  nsId: string;
+  onClose: () => void;
+}) {
+  const save = useSave();
+  const assigned = type
+    ? data.typePeople.filter((p) => p.service_type_id === type.id)
+    : [];
+  const assignedIds = new Set(assigned.map((p) => p.user_id));
+  const available = users.filter((u) => !assignedIds.has(u.id));
+
+  return (
+    <Dialog open={type !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>Gán nhân sự vào &ldquo;{type?.name}&rdquo;</DialogTitle>
+          <DialogDescription>
+            Chỉ những người được gán mới chấm giờ được vào loại này. Không gán ai thì mọi người
+            đều log được.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2">
+          {assigned.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12.5px] text-ink-3">
+              Chưa gán ai — mọi người đều chấm giờ được vào loại này.
+            </p>
+          ) : (
+            assigned.map((p) => {
+              const u = users.find((x) => x.id === p.user_id);
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2.5 rounded-lg border border-line px-3 py-2"
+                >
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={{ backgroundColor: u?.avatar_color ?? "#8B87A0" }}
+                  >
+                    {u?.initial ?? "?"}
+                  </span>
+                  <span className="flex-1 text-[13px] font-medium">{u?.full_name ?? "—"}</span>
+                  <button
+                    type="button"
+                    onClick={() => save.mutate(() => deleteRow("service_type_people", p.id))}
+                    className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                    aria-label="Bỏ gán"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+
+          {available.length > 0 && type && (
+            <Select
+              value=""
+              onValueChange={(uid) =>
+                save.mutate(() =>
+                  insertRow("service_type_people", {
+                    namespace_id: nsId,
+                    service_type_id: type.id,
+                    user_id: uid,
+                  }),
+                )
+              }
+            >
+              <SelectTrigger className="border-dashed text-[12.5px]">
+                <SelectValue placeholder="+ Thêm người" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[260px]">
+                {available.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Xong
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

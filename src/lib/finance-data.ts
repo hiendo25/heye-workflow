@@ -156,6 +156,7 @@ export type OverheadSettings = {
 export type FinanceData = {
   clients: ClientCompany[];
   serviceTypes: ServiceType[];
+  typePeople: ServiceTypePerson[];
   rateCards: RateCard[];
   rateCardItems: RateCardItem[];
   budgets: Budget[];
@@ -190,6 +191,7 @@ export async function fetchFinance(): Promise<FinanceData> {
   const [
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead, timeEntries, submissions, timeSettings, timerLogs, expenses, expenseItems,
+    typePeople,
   ] = await Promise.all([
       all<ClientCompany>("client_companies", "name"),
       all<ServiceType>("service_types", "position"),
@@ -207,12 +209,13 @@ export async function fetchFinance(): Promise<FinanceData> {
       all<TimerLog>("timer_logs", "started_at"),
       all<Expense>("expenses", "date"),
       all<ExpenseItem>("expense_items", "position"),
+      all<ServiceTypePerson>("service_type_people"),
     ]);
   return {
     clients, serviceTypes, rateCards, rateCardItems, budgets, sections, services,
     costRates, budgetCostRates, overhead: overhead[0] ?? null, timeEntries,
     submissions, timeSettings: timeSettings[0] ?? null, timerLogs,
-    expenses, expenseItems,
+    expenses, expenseItems, typePeople,
   };
 }
 
@@ -220,6 +223,17 @@ export const financeQuery = {
   queryKey: ["finance"],
   queryFn: fetchFinance,
   staleTime: 60_000,
+};
+
+/**
+ * Gán nhân sự vào loại dịch vụ, để hạn chế ai được chấm giờ vào loại nào.
+ * Không gán ai = mọi người đều log được.
+ */
+export type ServiceTypePerson = {
+  id: string;
+  namespace_id: string;
+  service_type_id: string;
+  user_id: string;
 };
 
 export const UNIT_LABEL: Record<string, string> = {

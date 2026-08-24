@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { BarChart3, EyeOff } from "lucide-react";
+import { BarChart3, ChevronDown, EyeOff } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   budgetRunsOutOn,
   type ForecastTicket,
@@ -48,9 +54,6 @@ export function BudgetOverview({
 
   // Chưa dựng module hoá đơn, nên coi phần đã xuất là 0 và toàn bộ doanh thu
   // đã ghi nhận là phần CHỜ XUẤT. Khi có bảng hoá đơn thì thay bằng số thật.
-  const invoiced = 0;
-  const toInvoice = Math.max(0, s.revenue - invoiced);
-  const invoicedPct = s.contractTotal ? (invoiced / s.contractTotal) * 100 : 0;
   const series = useMemo(
     () => buildSeries(data, tickets, budgetId, grain, cumulative),
     [data, tickets, budgetId, grain, cumulative],
@@ -62,9 +65,35 @@ export function BudgetOverview({
     [data, tickets, budgetId],
   );
 
-  const timePct = s.soldQty ? Math.min(100, (s.recognizedMin / 60 / s.soldQty) * 100) : 0;
-  const workedPct = s.estimateQty ? Math.min(100, (s.workedMin / 60 / s.estimateQty) * 100) : 0;
-  const budgetPct = s.contractTotal ? (s.usedBudget / s.contractTotal) * 100 : 0;
+  // --- Kỳ đang chọn trên biểu đồ
+  //
+  // Tài liệu Productive: "clicking on the point in the graph will also update
+  // the forecasted budget data below the charts". Bấm một điểm thì ba ô số
+  // liệu chuyển sang số TÍNH ĐẾN HẾT KỲ ĐÓ, kể cả kỳ tương lai (lúc đó là số
+  // dự báo). Trước đây ba ô luôn hiện số hôm nay nên bấm biểu đồ vô tác dụng.
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const picked = pickedKey ? (series.find((p) => p.key === pickedKey) ?? null) : null;
+
+  // Số hiển thị: theo kỳ đã chọn, không chọn thì lấy số hiện tại
+  const shownWorkedMin = picked ? picked.worked : s.workedMin;
+  const shownRecogMin = picked ? picked.billable : s.recognizedMin;
+  const shownUsed = picked ? picked.revenue : s.usedBudget;
+  const shownRevenue = picked ? picked.revenue : s.revenue;
+  const shownCost = picked ? picked.cost : s.cost;
+  const shownProfit = picked ? picked.profit : s.profit;
+  const shownRemaining = s.contractTotal - shownUsed;
+  const shownMargin = shownRevenue ? (shownProfit / shownRevenue) * 100 : 0;
+  const badgeDate = picked ? fmtVn(picked.endDate) : todayVn;
+
+  // Chưa dựng module hoá đơn, nên coi phần đã xuất là 0 và toàn bộ doanh thu
+  // đã ghi nhận là phần CHỜ XUẤT. Khi có bảng hoá đơn thì thay bằng số thật.
+  const invoiced = 0;
+  const toInvoice = Math.max(0, shownRevenue - invoiced);
+  const invoicedPct = s.contractTotal ? (invoiced / s.contractTotal) * 100 : 0;
+
+  const timePct = s.soldQty ? Math.min(100, (shownRecogMin / 60 / s.soldQty) * 100) : 0;
+  const workedPct = s.estimateQty ? Math.min(100, (shownWorkedMin / 60 / s.estimateQty) * 100) : 0;
+  const budgetPct = s.contractTotal ? (shownUsed / s.contractTotal) * 100 : 0;
 
   return (
     <div className="space-y-4">
@@ -96,9 +125,41 @@ export function BudgetOverview({
           </Seg>
         </div>
 
-        <span className="num rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] text-ink-2">
-          {series.at(-1)?.label ?? "—"}
-        </span>
+        {/* Bộ chọn kỳ. Trước đây đây là một &lt;span&gt; chết chỉ hiện kỳ cuối
+            chuỗi — không bấm được, không đổi được gì. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="num inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] text-ink-2 hover:border-brand hover:text-brand"
+            >
+              {picked ? picked.label : "Hôm nay"}
+              <ChevronDown size={13} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[300px] min-w-[150px] overflow-y-auto">
+            <DropdownMenuItem onSelect={() => setPickedKey(null)}>
+              {picked ? "" : "• "}Hôm nay
+            </DropdownMenuItem>
+            {series.map((pt) => (
+              <DropdownMenuItem key={pt.key} onSelect={() => setPickedKey(pt.key)}>
+                {pickedKey === pt.key ? "• " : ""}
+                {pt.label}
+                {pt.isFuture && <span className="ml-1 text-[11px] text-ink-3">dự báo</span>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {picked && (
+          <button
+            type="button"
+            onClick={() => setPickedKey(null)}
+            className="text-[12.5px] font-medium text-brand hover:underline"
+          >
+            Về hôm nay
+          </button>
+        )}
 
         <div className="flex-1" />
         <button
@@ -126,6 +187,8 @@ export function BudgetOverview({
         <Chart
           tab={view}
           series={series}
+          pickedKey={pickedKey}
+          onPick={setPickedKey}
           /* Trần hợp đồng chỉ có nghĩa khi cộng dồn: xem theo từng kỳ thì
              so một tháng lẻ với tổng hợp đồng là vô nghĩa. */
           contractTotal={cumulative ? s.contractTotal : 0}
@@ -136,25 +199,25 @@ export function BudgetOverview({
       <div className="grid gap-0 overflow-hidden rounded-xl border border-line bg-surface md:grid-cols-3">
         {view === "budgeting" ? (
           <>
-            <Box title="Thời gian" date={todayVn}>
+            <Box title="Thời gian" date={badgeDate}>
               <Row label="Giờ đã bán" value={`${s.soldQty}`} />
-              <Row label="Giờ tính tiền" value={fmtDuration(s.recognizedMin)} />
+              <Row label="Giờ tính tiền" value={fmtDuration(shownRecogMin)} />
               <Row
                 label={`Còn lại (${Math.round(100 - timePct)}%)`}
-                value={`${Math.max(0, s.soldQty - s.recognizedMin / 60).toFixed(1)}`}
+                value={`${Math.max(0, s.soldQty - shownRecogMin / 60).toFixed(1)}`}
                 big
               />
               <Bar pct={100 - timePct} />
             </Box>
 
-            <Box title="Ngân sách" date={todayVn}>
+            <Box title="Ngân sách" date={badgeDate}>
               <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
-              <Row label="Đã dùng" value={money(Math.round(s.usedBudget))} />
+              <Row label="Đã dùng" value={money(Math.round(shownUsed))} />
               <Row
                 label={`Còn lại (${Math.round(100 - budgetPct)}%)`}
-                value={money(Math.round(s.remainingBudget))}
+                value={money(Math.round(shownRemaining))}
                 big
-                tone={s.remainingBudget < 0 ? "bad" : undefined}
+                tone={shownRemaining < 0 ? "bad" : undefined}
               />
               <Bar pct={100 - budgetPct} />
             </Box>
@@ -163,7 +226,7 @@ export function BudgetOverview({
                 tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
                 ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
                 là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" date={todayVn} action="Tạo hóa đơn">
+            <Box title="Hóa đơn" date={badgeDate} action="Tạo hóa đơn">
               <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
               <Row
                 label={`Đã xuất (${Math.round(invoicedPct)}%)`}
@@ -179,34 +242,37 @@ export function BudgetOverview({
           </>
         ) : (
           <>
-            <Box title="Thời gian" date={todayVn}>
+            <Box title="Thời gian" date={badgeDate}>
               <Row label="Giờ ước tính" value={`${s.estimateQty}`} />
-              <Row label="Giờ đã làm" value={fmtDuration(s.workedMin)} />
+              <Row label="Giờ đã làm" value={fmtDuration(shownWorkedMin)} />
               <Row
                 label={`Còn lại (${Math.round(100 - workedPct)}%)`}
-                value={`${Math.max(0, s.estimateQty - s.workedMin / 60).toFixed(1)}`}
+                value={`${Math.max(0, s.estimateQty - shownWorkedMin / 60).toFixed(1)}`}
                 big
               />
               <Bar pct={100 - workedPct} />
             </Box>
 
-            <Box title="Lợi nhuận" date={todayVn}>
-              <Row label="Doanh thu" value={money(Math.round(s.revenue))} />
-              <Row label="Chi phí" value={money(Math.round(s.cost))} />
+            <Box title="Lợi nhuận" date={badgeDate}>
+              <Row label="Doanh thu" value={money(Math.round(shownRevenue))} />
+              <Row label="Chi phí" value={money(Math.round(shownCost))} />
               <Row
-                label={`Lợi nhuận (${Math.round(s.margin)}%)`}
-                value={money(Math.round(s.profit))}
+                label={`Lợi nhuận (${Math.round(shownMargin)}%)`}
+                value={money(Math.round(shownProfit))}
                 big
-                tone={s.profit >= 0 ? "good" : "bad"}
+                tone={shownProfit >= 0 ? "good" : "bad"}
               />
-              <Bar pct={Math.max(0, Math.min(100, s.margin))} tone={s.profit >= 0 ? "good" : "bad"} />
+              <Bar
+                pct={Math.max(0, Math.min(100, shownMargin))}
+                tone={shownProfit >= 0 ? "good" : "bad"}
+              />
             </Box>
 
             {/* Ô thứ ba LUÔN là Hóa đơn ở Productive, cả hai tab. Trước đây
                 tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
                 ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
                 là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" date={todayVn} action="Tạo hóa đơn">
+            <Box title="Hóa đơn" date={badgeDate} action="Tạo hóa đơn">
               <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
               <Row
                 label={`Đã xuất (${Math.round(invoicedPct)}%)`}
@@ -243,6 +309,10 @@ export function BudgetOverview({
 
 type Point = {
   label: string;
+  /** Mã kỳ dạng 2026-08 hoặc 2026-W34, dùng làm khoá khi chọn kỳ */
+  key: string;
+  /** Ngày cuối kỳ, hiện trên badge của ba ô số liệu khi chọn kỳ này */
+  endDate: string;
   /** Giờ đã làm (từ dòng giờ thật) */
   worked: number;
   /** Giờ tính được tiền */
@@ -356,6 +426,8 @@ function buildSeries(
     }
     return {
       label: grain === "month" ? fmtMonth(k) : fmtWeek(k),
+      key: k,
+      endDate: periodEnd(k, grain),
       worked: w,
       billable: bi,
       scheduled: sc,
@@ -397,10 +469,15 @@ function Chart({
   tab,
   series,
   contractTotal,
+  pickedKey,
+  onPick,
 }: {
   tab: Tab;
   series: Point[];
   contractTotal: number;
+  /** Kỳ người dùng đã bấm chọn, null nghĩa là đang xem số hiện tại. */
+  pickedKey: string | null;
+  onPick: (key: string | null) => void;
 }) {
   if (series.length === 0) {
     return (
@@ -427,6 +504,11 @@ function Chart({
   const x = (i: number) => pad.l + slot * (i + 0.5);
   const yM = (v: number) => pad.t + ih - (v / maxMoney) * ih;
   const yH = (v: number) => pad.t + ih - (v / maxHours) * ih;
+
+  const pickedIdx = pickedKey ? series.findIndex((p) => p.key === pickedKey) : -1;
+  // Nhãn vạch đổi theo độ chi tiết, giống Productive ghi Current month vs
+  // Current week chứ không dùng một chữ chung.
+  const grainLabel = series[0]?.key.includes("-W") || (series[0]?.key.length ?? 0) > 7 ? "Tuần" : "Tháng";
 
   const firstFuture = series.findIndex((p) => p.isFuture);
   const cutX = firstFuture > 0 ? x(firstFuture - 1) : -1;
@@ -478,21 +560,34 @@ function Chart({
           }}
         >
           <div className="mb-1 font-bold">{hp.label}</div>
-          <TipRow
-            color="#F5C86B"
-            label={hp.isFuture ? "Giờ xếp lịch tương lai" : "Giờ đã xếp lịch"}
-            value={`${Math.round(hp.scheduled / 60)}h`}
-          />
+          {/* Productive hiện CẢ BA dòng giờ cùng lúc, không thay thế lẫn
+              nhau: giờ tính tiền, giờ đã xếp, và riêng phần xếp cho tương lai. */}
           <TipRow
             color="#E9A319"
             label={tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
             value={`${Math.round((tab === "budgeting" ? hp.billable : hp.worked) / 60)}h`}
           />
+          <TipRow
+            color="#F5C86B"
+            label="Giờ đã xếp lịch"
+            value={`${Math.round(hp.scheduled / 60)}h`}
+          />
+          {hp.isFuture && (
+            <TipRow
+              color="#F5C86B"
+              label="Giờ xếp lịch tương lai"
+              value={`${Math.round(hp.scheduled / 60)}h`}
+            />
+          )}
           <div className="my-1 border-t border-line" />
           {tab === "budgeting" ? (
             <>
-              <TipRow color="var(--bad)" label="Trần hợp đồng" value={money(Math.round(contractTotal))} />
-              <TipRow color="var(--good)" label="Đã dùng" value={money(Math.round(hp.revenue))} />
+              <TipRow color="var(--bad)" label="Tổng ngân sách" value={money(Math.round(contractTotal))} />
+              <TipRow
+                color="var(--good)"
+                label={hp.isFuture ? "Đã dùng (dự báo)" : "Đã dùng"}
+                value={money(Math.round(hp.revenue))}
+              />
               <TipRow
                 label="Còn lại"
                 value={money(Math.round(contractTotal - hp.revenue))}
@@ -553,7 +648,7 @@ function Chart({
                 fill="var(--ink-3)"
                 fontFamily="var(--font-mono)"
               >
-                {Math.round(maxHours * r)}h
+                {`${Math.round(maxHours * r)}:00`}
               </text>
             </g>
           );
@@ -659,8 +754,9 @@ function Chart({
               y1={pad.t}
               x2={cutX}
               y2={pad.t + ih}
-              stroke="var(--brand)"
+              stroke="var(--ink-3)"
               strokeWidth="1.5"
+              strokeDasharray="4 4"
             />
             <rect
               x={cutX - 9}
@@ -669,18 +765,52 @@ function Chart({
               height="84"
               rx="3"
               fill="var(--surface)"
-              stroke="var(--brand)"
+              stroke="var(--ink-3)"
               strokeWidth="1"
             />
             <text
               x={cutX}
               y={pad.t + 46}
               fontSize="9"
-              fill="var(--brand)"
+              fill="var(--ink-2)"
               textAnchor="middle"
               transform={`rotate(-90 ${cutX} ${pad.t + 46})`}
             >
-              Kỳ đang xem
+              {grainLabel} hiện tại
+            </text>
+          </g>
+        )}
+
+        {/* Vạch kỳ ĐÃ CHỌN: tím đặc, nhãn nền tím. Productive vẽ HAI vạch
+            cùng lúc — xám nét đứt cho kỳ hiện tại, tím cho kỳ đang chọn —
+            để thấy ngay mình đang xem lệch bao xa so với hôm nay. */}
+        {pickedIdx >= 0 && (
+          <g pointerEvents="none">
+            <line
+              x1={x(pickedIdx)}
+              y1={pad.t}
+              x2={x(pickedIdx)}
+              y2={pad.t + ih}
+              stroke="var(--brand)"
+              strokeWidth="2"
+            />
+            <rect
+              x={x(pickedIdx) - 9}
+              y={pad.t + 4}
+              width="18"
+              height="88"
+              rx="3"
+              fill="var(--brand)"
+            />
+            <text
+              x={x(pickedIdx)}
+              y={pad.t + 48}
+              fontSize="9"
+              fill="#fff"
+              textAnchor="middle"
+              transform={`rotate(-90 ${x(pickedIdx)} ${pad.t + 48})`}
+            >
+              {grainLabel} đang chọn
             </text>
           </g>
         )}
@@ -727,6 +857,11 @@ function Chart({
             fill="transparent"
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
+            onClick={() => {
+              const k = series[i]?.key ?? null;
+              onPick(pickedKey === k ? null : k);
+            }}
+            style={{ cursor: "pointer" }}
           />
         ))}
 
@@ -752,12 +887,9 @@ function Chart({
         <Legend color="#F5C86B" box faded>
           Giờ đã xếp lịch
         </Legend>
-        <Legend color="#F5C86B" box hatched>
-          Giờ xếp lịch tương lai
-        </Legend>
         {tab === "budgeting" ? (
           <>
-            <Legend color="var(--bad)">Trần hợp đồng</Legend>
+            <Legend color="var(--bad)">Tổng ngân sách</Legend>
             <Legend color="var(--good)">Đã dùng</Legend>
             <Legend color="var(--good)" dash>
               Đã dùng (dự báo)
@@ -961,6 +1093,22 @@ function shortMoney(v: number): string {
 const fmtVn = (v: string) => {
   const [y, m, d] = v.split("-");
   return `${d}/${m}/${y}`;
+};
+
+/**
+ * Ngày cuối của một kỳ. Productive hiển thị ngày này trên badge của ba ô số
+ * liệu khi người dùng chọn một kỳ trên biểu đồ — số liệu là tính đến hết kỳ,
+ * không phải tính đến hôm nay.
+ */
+const periodEnd = (k: string, grain: Grain): string => {
+  if (grain === "month") {
+    const [y, m] = k.split("-").map(Number);
+    // Ngày 0 của tháng kế tiếp chính là ngày cuối tháng này
+    return isoDate(new Date(y!, m!, 0));
+  }
+  const d = new Date(k);
+  d.setDate(d.getDate() + 6);
+  return isoDate(d);
 };
 
 const fmtMonth = (k: string) => {
