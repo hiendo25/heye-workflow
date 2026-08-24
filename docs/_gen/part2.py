@@ -3,8 +3,8 @@
 
 
 def build(g):
-    doc, h, p, bullet, table, img, note, pagebreak = (
-        g.doc, g.h, g.p, g.bullet, g.table, g.img, g.note, g.pagebreak
+    doc, h, p, bullet, table, img, note, pagebreak, field = (
+        g.doc, g.h, g.p, g.bullet, g.table, g.img, g.note, g.pagebreak, g.field
     )
 
     # ══════════════════ 3. HAI TRỤC TÍNH TIỀN ══════════════════
@@ -150,23 +150,9 @@ def build(g):
     )
     img("02-bang-gia-danh-sach.png", "Hình 2 — Danh sách bảng giá")
 
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            [
-                "1",
-                "Cột của bảng danh sách",
-                "Tên bảng giá · Áp dụng cho khách nào · Số dòng giá · Trạng thái · Ngày tạo",
-            ],
-            [
-                "2",
-                "Một dòng bảng giá",
-                "Bấm vào để mở chi tiết. Menu ba chấm bên phải: Đổi tên · Nhân bản · Lưu trữ · Xoá",
-            ],
-            ["3", "Nút Thêm bảng giá", "Tạo bảng mới, chọn áp dụng cho khách nào hoặc để trống = chuẩn công ty"],
-        ],
-        widths=[1.0, 4.4, 10.8],
-    )
+    field("Cột của bảng danh sách", "tên bảng giá · Áp dụng cho khách nào · Số dòng giá · Trạng thái · Ngày tạo", num="1")
+    field("Một dòng bảng giá", "bấm vào để mở chi tiết. Menu ba chấm bên phải: Đổi tên · Nhân bản · Lưu trữ · Xoá", num="2")
+    field("Nút Thêm bảng giá", "tạo bảng mới, chọn áp dụng cho khách nào hoặc để trống = chuẩn công ty", num="3")
 
     h("4.1 Bảng chuẩn công ty và bảng riêng khách", 2)
     table(
@@ -192,14 +178,8 @@ def build(g):
     )
 
     img("03-bang-gia-chi-tiet.png", "Hình 3 — Chi tiết một bảng giá")
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            ["1", "Nút quay lại", "Về danh sách bảng giá"],
-            ["2", "Thêm dòng giá", "Mỗi dòng gồm: tên dòng, loại dịch vụ, đơn vị, đơn giá"],
-        ],
-        widths=[1.0, 4.4, 10.8],
-    )
+    field("Nút quay lại", "về danh sách bảng giá", num="1")
+    field("Thêm dòng giá", "mỗi dòng gồm: tên dòng, loại dịch vụ, đơn vị, đơn giá", num="2")
 
     h("4.2 Vì sao dòng giá cần TÊN RIÊNG", 2)
     p(
@@ -228,22 +208,8 @@ def build(g):
     )
     img("04-gia-von-danh-sach.png", "Hình 4 — Danh sách giá vốn nhân sự")
 
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            [
-                "1",
-                "Cột bảng",
-                "Nhân sự · Kỳ lương · Lương kỳ · Giờ mỗi tuần · Giá vốn mỗi giờ",
-            ],
-            [
-                "2",
-                "Ô chi phí gián tiếp",
-                "Hiển thị mức phân bổ hiện tại (153.061 đ/giờ), bấm vào để cấu hình",
-            ],
-        ],
-        widths=[1.0, 4.4, 10.8],
-    )
+    field("Cột bảng", "nhân sự · Kỳ lương · Lương kỳ · Giờ mỗi tuần · Giá vốn mỗi giờ", num="1")
+    field("Ô chi phí gián tiếp", "hiển thị mức phân bổ hiện tại (153.061 đ/giờ), bấm vào để cấu hình", num="2")
     p(
         "Cột Giá vốn mỗi giờ hiện phép cộng ngay dưới số tổng: "
         "“211.957 + 153.061” nghĩa là lương quy giờ cộng chi phí gián tiếp. "
@@ -264,23 +230,8 @@ def build(g):
     )
 
     img("05-gia-von-chi-tiet.png", "Hình 5 — Chi tiết giá vốn một người")
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            [
-                "1",
-                "Biểu đồ giá vốn theo thời gian",
-                "Vẽ dạng BẬC THANG vì giá vốn đổi đột ngột tại ngày hiệu lực, không tăng dần. Trục dọc không bắt đầu từ 0 để thấy rõ chênh lệch",
-            ],
-            [
-                "2",
-                "Lịch sử mức giá",
-                "Mỗi lần tăng lương là một dòng mới. Dòng cũ giữ nguyên, đảm bảo chi phí đã tính của giờ cũ không bị đổi",
-            ],
-        ],
-        widths=[1.0, 4.4, 10.8],
-        small=True,
-    )
+    field("Biểu đồ giá vốn theo thời gian", "vẽ dạng BẬC THANG vì giá vốn đổi đột ngột tại ngày hiệu lực, không tăng dần. Trục dọc không bắt đầu từ 0 để thấy rõ chênh lệch", num="1")
+    field("Lịch sử mức giá", "mỗi lần tăng lương là một dòng mới. Dòng cũ giữ nguyên, đảm bảo chi phí đã tính của giờ cũ không bị đổi", num="2")
 
     h("5.2 Sáu ô tóm tắt", 2)
     table(

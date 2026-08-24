@@ -3,8 +3,8 @@
 
 
 def build(g):
-    doc, h, p, bullet, table, img, note, pagebreak = (
-        g.doc, g.h, g.p, g.bullet, g.table, g.img, g.note, g.pagebreak
+    doc, h, p, bullet, table, img, note, pagebreak, field = (
+        g.doc, g.h, g.p, g.bullet, g.table, g.img, g.note, g.pagebreak, g.field
     )
 
     # ══════════════════ 7. HỢP ĐỒNG ══════════════════
@@ -22,22 +22,8 @@ def build(g):
 
     h("6.1 Vỏ màn hợp đồng", 2)
     img("07-hd-tong-quan.png", "Hình 7 — Tab Tổng quan của hợp đồng")
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            [
-                "1",
-                "Bốn tab bên trong hợp đồng",
-                "Tổng quan (Overview) · Hạng mục (Services) · Giờ (Time) · Chi phí (Expenses). Mọi thứ thuộc về hợp đồng đều nằm trong đây",
-            ],
-            [
-                "2",
-                "Biểu đồ diễn biến",
-                "Xem chi tiết ở mục 11",
-            ],
-        ],
-        widths=[1.0, 4.4, 10.8],
-    )
+    field("Bốn tab bên trong hợp đồng", "tổng quan (Overview) · Hạng mục (Services) · Giờ (Time) · Chi phí (Expenses). Mọi thứ thuộc về hợp đồng đều nằm trong đây", num="1")
+    field("Biểu đồ diễn biến", "xem chi tiết ở mục 11", num="2")
     p("Ngoài ra trên đầu màn còn có:")
     bullet("Cặp trạng thái Đang chạy — Đã bàn giao: bấm để chuyển")
     bullet("Khoảng ngày hiệu lực của hợp đồng")
@@ -51,17 +37,7 @@ def build(g):
 
     h("6.2 Tab Hạng mục — nơi khai những gì đang bán", 2)
     img("08-hd-hang-muc.png", "Hình 8 — Tab Hạng mục")
-    table(
-        ["#", "Cột", "Giải thích"],
-        [
-            [
-                "1",
-                "Toàn bộ header bảng",
-                "Nhóm/Hạng mục · Cách tính · Đơn vị · Theo dõi · Ước tính · Số lượng · Đơn giá · Thành tiền",
-            ],
-        ],
-        widths=[1.0, 4.4, 10.8],
-    )
+    field("Toàn bộ header bảng", "nhóm/Hạng mục · Cách tính · Đơn vị · Theo dõi · Ước tính · Số lượng · Đơn giá · Thành tiền", num="1")
 
     h("6.3 Bốn cách tính tiền", 2)
     table(
@@ -241,17 +217,7 @@ def build(g):
 
     h("8.2 Chế độ Bảng — lọc và gộp nhóm", 2)
     img("16-gio-cty-bang.png", "Hình 13 — Chế độ Bảng")
-    table(
-        ["#", "Thành phần", "Giải thích"],
-        [
-            [
-                "1",
-                "Thanh công cụ",
-                "Cột (chọn cột hiện) · Bộ lọc (chỉ dòng chờ duyệt, lọc theo người) · Nhóm (theo nhân sự / hợp đồng / hạng mục) · Tìm kiếm",
-            ],
-        ],
-        widths=[1.0, 3.4, 11.8],
-    )
+    field("Thanh công cụ", "cột (chọn cột hiện) · Bộ lọc (chỉ dòng chờ duyệt, lọc theo người) · Nhóm (theo nhân sự / hợp đồng / hạng mục) · Tìm kiếm", num="1")
     p(
         "Mỗi nhóm có dòng tiêu đề hiện số dòng, tổng giờ và nút “Duyệt N dòng”. "
         "Cuối bảng có hàng TỔNG. Cột “Cách ghi” phân biệt bấm giờ với nhập tay."
@@ -271,17 +237,7 @@ def build(g):
         "hạng mục đã bật icon ghi chi phí."
     )
     img("10-chi-phi-toan-cty.png", "Hình 14 — Màn Chi phí toàn công ty")
-    table(
-        ["#", "Cột", "Giải thích"],
-        [
-            [
-                "1",
-                "Header bảng",
-                "Hạng mục · Nội dung · Ngày · Thanh toán · Tệp · Chi ra · Tính khách · Duyệt",
-            ],
-        ],
-        widths=[1.0, 3.4, 11.8],
-    )
+    field("Header bảng", "hạng mục · Nội dung · Ngày · Thanh toán · Tệp · Chi ra · Tính khách · Duyệt", num="1")
 
     h("9.1 Hai trục trạng thái độc lập", 2)
     p(

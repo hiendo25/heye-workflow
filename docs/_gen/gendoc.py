@@ -95,16 +95,27 @@ def bullet(txt, lv=0):
     return par
 
 
-def field(name, desc, required=False):
+def field(name, desc, required=False, num=None):
     """Một trường trong hộp thoại, viết theo kiểu trang help của Productive:
     gạch đầu dòng, tên trường in đậm, gạch ngang, rồi mô tả chạy liền.
 
     Bảng ba cột kín chữ đọc mệt hơn nhiều — mắt phải nhảy ngang liên tục.
     Dạng này đọc một mạch từ trên xuống.
     """
-    par = doc.add_paragraph(style="List Bullet")
-    par.paragraph_format.left_indent = Cm(0.6)
-    par.paragraph_format.space_after = Pt(4)
+    # Có num thì dùng đoạn thường và tự đánh số, để số khớp với dấu trên ảnh.
+    # Không có num thì dùng gạch đầu dòng.
+    if num:
+        par = doc.add_paragraph()
+        par.paragraph_format.left_indent = Cm(0.6)
+        par.paragraph_format.space_after = Pt(4)
+        r = par.add_run(f"{num}. ")
+        r.bold = True
+        r.font.size = Pt(10)
+        r.font.color.rgb = BRAND
+    else:
+        par = doc.add_paragraph(style="List Bullet")
+        par.paragraph_format.left_indent = Cm(0.6)
+        par.paragraph_format.space_after = Pt(4)
     r = par.add_run(name + (" ✱" if required else ""))
     r.bold = True
     r.font.size = Pt(10)
