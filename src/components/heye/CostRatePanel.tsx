@@ -85,10 +85,18 @@ function CostChart({ rows }: { rows: CostRate[] }) {
   const t0 = new Date(pts[0]!.date).getTime();
   const t1 = new Date(today).getTime();
   const span = Math.max(1, t1 - t0);
-  const maxV = Math.max(...pts.map((p) => p.v)) * 1.15;
+  // Trục KHÔNG bắt đầu từ 0. Giá vốn dao động trong biên hẹp (208k -> 232k là
+  // tăng 11%), kéo trục về 0 thì chênh lệch bị nén còn một phần mười chiều
+  // cao, nhìn như đường phẳng — mất sạch ý nghĩa của biểu đồ.
+  const vs = pts.map((p) => p.v);
+  const lo = Math.min(...vs);
+  const hi = Math.max(...vs);
+  const pad0 = Math.max((hi - lo) * 0.35, hi * 0.04);
+  const minV = Math.max(0, lo - pad0);
+  const maxV = hi + pad0;
 
   const x = (d: string) => pad.l + ((new Date(d).getTime() - t0) / span) * iw;
-  const y = (v: number) => pad.t + ih - (v / maxV) * ih;
+  const y = (v: number) => pad.t + ih - ((v - minV) / (maxV - minV)) * ih;
 
   // Đường bậc thang: giữ nguyên mức cho tới mốc kế tiếp rồi nhảy dọc
   let d = `M${x(pts[0]!.date)} ${y(pts[0]!.v)}`;
@@ -117,7 +125,7 @@ function CostChart({ rows }: { rows: CostRate[] }) {
                 fill="var(--ink-3)"
                 fontFamily="var(--font-mono)"
               >
-                {shortVnd(maxV * r)}
+                {shortVnd(minV + (maxV - minV) * r)}
               </text>
             </g>
           );

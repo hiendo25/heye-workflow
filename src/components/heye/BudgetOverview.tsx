@@ -999,12 +999,14 @@ function Row({
   const c =
     tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "";
   return (
-    <div className="flex items-baseline justify-between py-[3px]">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 py-[3px]">
       <span className="flex items-baseline text-[12.5px] text-ink-2">
         <span className="whitespace-nowrap">{label}</span>
         {en && <span className="ml-1.5 whitespace-nowrap text-[11px] text-ink-3">{en}</span>}
       </span>
-      <span className={`num ${big ? "text-[15px] font-bold" : "text-[13px]"} ${c}`}>{value}</span>
+      <span className={`num shrink-0 ${big ? "text-[15px] font-bold" : "text-[13px]"} ${c}`}>
+        {value}
+      </span>
     </div>
   );
 }
