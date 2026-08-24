@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -429,20 +429,107 @@ function TypesPanel({ data, nsId }: { data: FinanceData; nsId: string }) {
         }
       />
 
-      <ConfirmDialog
-        open={del !== null}
-        title={`Xoá loại dịch vụ "${del?.name ?? ""}"?`}
-        body={
-          (usage.get(del?.id ?? "") ?? 0) > 0
-            ? "Loại này đang được dùng trong bảng giá. Xoá sẽ mất luôn các dòng giá đó — cân nhắc dùng Lưu trữ để giữ số liệu lịch sử."
-            : "Thao tác không hoàn tác được."
-        }
+      <DeleteMergeTypeDialog
+        type={del}
+        types={data.serviceTypes}
+        inUse={(usage.get(del?.id ?? "") ?? 0) > 0}
         onCancel={() => setDel(null)}
-        onConfirm={() =>
-          save.mutate(() => deleteRow("service_types", del!.id), { onSuccess: () => setDel(null) })
+        onConfirm={(intoId) =>
+          save.mutate(
+            async () => {
+              // Chuyển hết dòng giá sang loại đích RỒI mới xoá, để không mất
+              // dữ liệu. Đây là điểm khác cốt lõi với cách làm cũ.
+              if (intoId) {
+                for (const it of data.rateCardItems.filter((i) => i.service_type_id === del!.id)) {
+                  await updateRow("rate_card_items", it.id, { service_type_id: intoId });
+                }
+              }
+              await deleteRow("service_types", del!.id);
+            },
+            { onSuccess: () => setDel(null) },
+          )
         }
       />
     </>
+  );
+}
+
+/**
+ * Xoá loại dịch vụ = GỘP sang loại khác, không phải xoá trắng.
+ *
+ * Cách cũ xoá thẳng, kéo theo mất hết dòng giá đang trỏ vào loại đó.
+ * Productive bắt chọn một loại đích, chuyển toàn bộ dòng giá / giờ / chi phí
+ * sang đó rồi mới xoá — số liệu lịch sử không mất, chỉ đổi nhãn.
+ */
+function DeleteMergeTypeDialog({
+  type,
+  types,
+  inUse,
+  onCancel,
+  onConfirm,
+}: {
+  type: ServiceType | null;
+  types: ServiceType[];
+  inUse: boolean;
+  onCancel: () => void;
+  onConfirm: (intoId: string | null) => void;
+}) {
+  const [into, setInto] = useState("");
+  const options = types.filter((t) => t.id !== type?.id && !t.is_archived);
+
+  useEffect(() => {
+    if (type) setInto("");
+  }, [type]);
+
+  return (
+    <Dialog open={type !== null} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>Xoá và gộp loại dịch vụ</DialogTitle>
+        </DialogHeader>
+
+        {inUse ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-ink-2">
+              Chuyển mọi dòng giá đang dùng &ldquo;{type?.name}&rdquo; sang loại nào?
+            </p>
+            <Select value={into} onValueChange={setInto}>
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn loại thay thế" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2.5 text-[12.5px] text-ink">
+              Mọi dòng giá, giờ và chi phí đang gắn với &ldquo;{type?.name}&rdquo; sẽ chuyển sang
+              loại đã chọn. <strong>Không hoàn tác được.</strong>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] text-ink-2">
+            Loại này chưa được dùng ở đâu, xoá được ngay. Không hoàn tác được.
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={inUse && !into}
+            onClick={() => onConfirm(inUse ? into : null)}
+            className="bg-bad text-white hover:bg-bad/90"
+          >
+            {inUse ? "Gộp và xoá" : "Xoá"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

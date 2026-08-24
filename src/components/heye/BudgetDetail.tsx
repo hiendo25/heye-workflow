@@ -18,6 +18,8 @@ import {
   FileText,
   CalendarDays,
   PanelLeftClose,
+  Clock,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BudgetOverview } from "@/components/heye/BudgetOverview";
@@ -68,6 +70,7 @@ import type { User } from "@/lib/heye-data";
 /** Cột hiện được, bật/tắt qua nút "Cột" giống Fields của Productive. */
 const COLUMNS = [
   { key: "desc", label: "Cách tính" },
+  { key: "unit", label: "Đơn vị" },
   { key: "track", label: "Theo dõi" },
   { key: "estimate", label: "Ước tính" },
   { key: "quantity", label: "Số lượng" },
@@ -163,6 +166,22 @@ export function BudgetDetail({
   const loose = services.filter((s) => !s.section_id);
   const total = budgetTotal(services);
   const totalQty = services.reduce((a, s) => a + Number(s.quantity), 0);
+
+  /** Nhân bản hạng mục: chép mọi thiết lập, thêm tiền tố vào tên. */
+  const dupService = (s: BudgetService) =>
+    onAddService({
+      budget_id: s.budget_id,
+      section_id: s.section_id,
+      name: `Bản sao của ${s.name}`,
+      service_type_id: s.service_type_id,
+      billing_type: s.billing_type,
+      unit: s.unit,
+      quantity: s.quantity,
+      price: s.price,
+      estimate: s.estimate,
+      allow_time: s.allow_time,
+      allow_expense: s.allow_expense,
+    });
 
   const on = (k: ColKey) => cols.has(k);
   const toggle = (k: ColKey) =>
@@ -363,6 +382,7 @@ export function BudgetDetail({
                   </div>
                 </Th>
                 {on("desc") && <Th className="text-left">Cách tính</Th>}
+                {on("unit") && <Th className="text-left">Đơn vị</Th>}
                 {on("track") && <Th className="text-center">Theo dõi</Th>}
                 {on("estimate") && <Th className="text-right">Ước tính</Th>}
                 {on("quantity") && (
@@ -400,6 +420,8 @@ export function BudgetDetail({
                 const rows = services.filter((s) => s.section_id === sec.id);
                 return (
                   <SectionRows
+                    onPatch={onEditService}
+                    onDuplicate={dupService}
                     key={sec.id}
                     name={sec.name}
                     rows={rows}
@@ -424,6 +446,8 @@ export function BudgetDetail({
 
               {loose.length > 0 && (
                 <SectionRows
+                  onPatch={onEditService}
+                  onDuplicate={dupService}
                   name={sections.length ? "Chưa phân nhóm" : "Hạng mục bán"}
                   rows={loose}
                   data={data}
@@ -554,6 +578,8 @@ function SectionRows({
   onAdd,
   onEdit,
   onDelete,
+  onPatch,
+  onDuplicate,
 }: {
   name: string;
   rows: BudgetService[];
@@ -569,6 +595,9 @@ function SectionRows({
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Sửa nhanh một trường ngay trên bảng, dùng cho hai icon Theo dõi. */
+  onPatch: (id: string, v: Record<string, unknown>) => void;
+  onDuplicate: (s: BudgetService) => void;
 }) {
   const on = (k: ColKey) => cols.has(k);
   const sum = budgetTotal(rows);
@@ -596,6 +625,7 @@ function SectionRows({
           )}
         </td>
         {on("desc") && <td />}
+        {on("unit") && <td />}
         {on("track") && <td />}
         {on("estimate") && <td />}
         {on("quantity") && <td className="num px-3 py-2 text-right font-semibold">{qty}</td>}
@@ -660,10 +690,39 @@ function SectionRows({
                 </span>
               </td>
             )}
+            {on("unit") && (
+              <td className="px-3 py-2 text-[12px] text-ink-2">{UNIT_LABEL[s.unit] ?? s.unit}</td>
+            )}
             {on("track") && (
-              <td className="px-3 py-2 text-center text-[11px] text-ink-3">
-                {[s.allow_time && "giờ", s.allow_expense && "chi phí"].filter(Boolean).join(" · ") ||
-                  "—"}
+              <td className="px-3 py-2">
+                {/* Hai icon bấm được, tô tím khi bật — không phải chuỗi chữ.
+                    Đồng hồ = cho ghi giờ, hoá đơn = cho ghi chi phí. */}
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    type="button"
+                    title={s.allow_time ? "Đang cho ghi giờ" : "Không cho ghi giờ"}
+                    onClick={() => onPatch(s.id, { allow_time: !s.allow_time })}
+                    className={`rounded p-1 transition ${
+                      s.allow_time
+                        ? "bg-brand-soft text-brand"
+                        : "text-ink-3 hover:bg-line/60 hover:text-ink-2"
+                    }`}
+                  >
+                    <Clock size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    title={s.allow_expense ? "Đang cho ghi chi phí" : "Không cho ghi chi phí"}
+                    onClick={() => onPatch(s.id, { allow_expense: !s.allow_expense })}
+                    className={`rounded p-1 transition ${
+                      s.allow_expense
+                        ? "bg-brand-soft text-brand"
+                        : "text-ink-3 hover:bg-line/60 hover:text-ink-2"
+                    }`}
+                  >
+                    <Receipt size={13} />
+                  </button>
+                </div>
               </td>
             )}
             {on("estimate") && (
@@ -695,6 +754,15 @@ function SectionRows({
                   aria-label="Sửa hạng mục"
                 >
                   <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDuplicate(s)}
+                  className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                  aria-label="Nhân bản hạng mục"
+                  title="Nhân bản"
+                >
+                  <Copy size={13} />
                 </button>
                 <button
                   type="button"
