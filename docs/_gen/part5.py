@@ -2,23 +2,21 @@
 """
 Chương 13 — Phụ lục: các hộp thoại thêm/sửa.
 
-Cách viết theo trang help của Productive: mỗi trường trả lời hai câu — trường
-này SINH RA ĐỂ LÀM GÌ, và điền sai thì HỎNG Ở ĐÂU. Chỉ nói "nhập tên vào ô
-Tên" thì người đọc vẫn không biết đặt tên thế nào cho đúng.
+Viết theo đúng format trang help của Productive (đã đối chiếu trực tiếp): KHÔNG
+dùng bảng, mà gạch đầu dòng với tên trường in đậm rồi gạch ngang và mô tả. Kèm
+ảnh thật và hộp Ghi chú. Bảng ba cột kín chữ bắt mắt nhảy ngang liên tục, dạng
+này đọc một mạch từ trên xuống.
 """
 
 
 def build(g):
-    h, p, table, img, note, pagebreak = g.h, g.p, g.table, g.img, g.note, g.pagebreak
-
-    # Bảng ba cột dùng chung: Trường · Mục đích · Cách điền
-    W = [3.6, 6.4, 6.4]
+    h, p, img, note, pagebreak, field = g.h, g.p, g.img, g.note, g.pagebreak, g.field
 
     pagebreak()
     h("13. Phụ lục — Các hộp thoại thêm và sửa", 1)
     p(
-        "Tra cứu khi đang thao tác. Mỗi trường ghi rõ nó sinh ra để làm gì và "
-        "điền sai thì ảnh hưởng tới đâu. Dấu ✱ là trường bắt buộc."
+        "Tra cứu khi đang thao tác. Mỗi trường ghi rõ nó dùng để làm gì và ảnh "
+        "hưởng tới đâu. Dấu ✱ là trường bắt buộc."
     )
 
     # ═════════════ 13.1 ═════════════
@@ -26,31 +24,25 @@ def build(g):
     img("m01-them-loai-dich-vu.png", "Hình 18 — Hộp thoại thêm loại dịch vụ")
     p(
         "Loại dịch vụ là danh mục gốc, khai một lần dùng cho mọi hợp đồng. Nó "
-        "tồn tại để trả lời câu hỏi cấp công ty: mảng Kiểm thử năm nay lãi bao "
-        "nhiêu, cộng từ tất cả dự án."
+        "trả lời câu hỏi cấp công ty: mảng Kiểm thử năm nay lãi bao nhiêu, cộng "
+        "từ tất cả dự án."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Tên ✱",
-                "Là khoá gộp báo cáo. Mọi hạng mục gắn cùng một loại sẽ cộng chung "
-                "một dòng doanh thu và chi phí",
-                "Đặt theo LOẠI LAO ĐỘNG, không theo việc cụ thể. Đúng: Kiểm thử. "
-                "Sai: Test màn đăng nhập — cái sau là tên hạng mục",
-            ],
-            [
-                "Mã viết tắt",
-                "Nhãn ngắn hiện cạnh tên, giúp phân biệt nhanh khi danh sách dài",
-                "Ba đến sáu ký tự in hoa: DEV, QC, DESIGN, DEVOPS",
-            ],
-            [
-                "Màu nhận diện",
-                "Chấm màu đầu mỗi dòng. Quét bảng bằng mắt nhanh hơn đọc chữ",
-                "Chọn màu khác biệt cho các loại hay đứng cạnh nhau",
-            ],
-        ],
-        widths=W,
+    field(
+        "Tên",
+        "khoá gộp báo cáo. Mọi hạng mục gắn cùng một loại sẽ cộng chung một dòng "
+        "doanh thu và chi phí. Đặt theo loại lao động, không theo việc cụ thể — "
+        "“Kiểm thử” đúng, “Test màn đăng nhập” sai vì đó là tên hạng mục.",
+        required=True,
+    )
+    field(
+        "Mã viết tắt",
+        "nhãn ngắn hiện cạnh tên, giúp phân biệt nhanh khi danh sách dài. Ba đến "
+        "sáu ký tự in hoa: DEV, QC, DESIGN.",
+    )
+    field(
+        "Màu nhận diện",
+        "chấm màu đầu mỗi dòng, quét bảng bằng mắt nhanh hơn đọc chữ. Chọn màu "
+        "khác biệt cho các loại hay đứng cạnh nhau.",
     )
     note(
         "Đặt tên sai ở đây kéo theo sai toàn bộ báo cáo về sau. Loại quá chi "
@@ -65,27 +57,20 @@ def build(g):
         "Mở từ menu ba chấm. Dùng để chặn ghi giờ nhầm loại: bạn Kiểm thử vô ý "
         "chọn Phát triển thì báo cáo mảng sai ngay, mà rất khó phát hiện."
     )
-    table(
-        ["Thao tác", "Điều gì xảy ra", "Khi nào dùng"],
-        [
-            [
-                "Thêm người",
-                "Người đó vào danh sách ngay, không cần bấm lưu. Từ giờ CHỈ những "
-                "người trong danh sách mới chọn được loại này khi ghi giờ",
-                "Đội có phân vai rõ, muốn chặn nhầm lẫn từ gốc",
-            ],
-            [
-                "Bấm dấu × cạnh tên",
-                "Bỏ gán. Giờ đã ghi trước đó vẫn giữ nguyên, không bị xoá",
-                "Người chuyển bộ phận",
-            ],
-            [
-                "Không gán ai",
-                "Mọi người đều ghi giờ được vào loại này — đây là mặc định",
-                "Đội nhỏ, ai cũng làm nhiều việc",
-            ],
-        ],
-        widths=W,
+    field(
+        "Thêm người",
+        "chọn trong ô “+ Thêm người”, người đó vào danh sách ngay không cần bấm "
+        "lưu. Từ lúc này chỉ những người trong danh sách mới chọn được loại này "
+        "khi ghi giờ.",
+    )
+    field(
+        "Bỏ gán",
+        "bấm dấu × cạnh tên. Giờ đã ghi trước đó vẫn giữ nguyên, không bị xoá.",
+    )
+    field(
+        "Không gán ai",
+        "mọi người đều ghi giờ được vào loại này. Đây là mặc định, hợp với đội "
+        "nhỏ ai cũng làm nhiều việc.",
     )
     note(
         "Cột phụ ngoài danh sách hiện “N người” hoặc “mọi người”, nhìn là biết "
@@ -100,23 +85,15 @@ def build(g):
         "chi. Xoá trắng là mất hết dữ liệu lịch sử, nên hệ thống bắt chuyển "
         "trước rồi mới xoá."
     )
-    table(
-        ["Tình huống", "Hệ thống làm gì", "Lý do"],
-        [
-            [
-                "Loại chưa được dùng ở đâu",
-                "Chỉ hỏi xác nhận rồi xoá thẳng",
-                "Không có dữ liệu nào để mất",
-            ],
-            [
-                "Loại đang có dòng giá, giờ, hoặc chi phí",
-                "Bắt chọn một loại thay thế. Toàn bộ dữ liệu chuyển sang loại đó, "
-                "sau đó loại cũ mới bị xoá",
-                "Giữ nguyên số liệu quá khứ, chỉ đổi nhãn phân loại. Báo cáo cũ "
-                "không bị thủng",
-            ],
-        ],
-        widths=[4.4, 6.0, 6.0],
+    field(
+        "Loại chưa dùng ở đâu",
+        "hộp thoại chỉ hỏi xác nhận rồi xoá thẳng, vì không có dữ liệu nào để mất.",
+    )
+    field(
+        "Loại đang có dữ liệu",
+        "hộp thoại bắt chọn một loại thay thế. Toàn bộ dòng giá, giờ và chi phí "
+        "chuyển sang loại đó, sau đó loại cũ mới bị xoá. Số liệu quá khứ giữ "
+        "nguyên, chỉ đổi nhãn phân loại nên báo cáo cũ không thủng.",
     )
     note(
         "Không hoàn tác được. Nếu chỉ muốn ẩn khỏi danh sách chọn mà vẫn giữ "
@@ -133,84 +110,67 @@ def build(g):
         "mới chỉ cần chọn, không phải nhớ và gõ lại — đây là chỗ hay sai số "
         "nhất khi làm tay."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Tên bảng giá ✱",
-                "Phân biệt các bảng khi chọn lúc lập hợp đồng",
-                "Gắn tên khách hoặc phạm vi áp dụng: Bảng giá OCB, Giá chuẩn công ty",
-            ],
-            [
-                "Khách hàng",
-                "Quyết định bảng này áp cho ai. Đây là trường quan trọng nhất",
-                "Để TRỐNG = bảng chuẩn công ty, áp cho mọi khách chưa có bảng riêng. "
-                "CHỌN khách = bảng riêng, chỉ khách đó dùng và được ưu tiên hơn bảng chuẩn",
-            ],
-        ],
-        widths=W,
+    field(
+        "Tên bảng giá",
+        "phân biệt các bảng khi chọn lúc lập hợp đồng. Gắn tên khách hoặc phạm "
+        "vi áp dụng: Bảng giá OCB, Giá chuẩn công ty.",
+        required=True,
     )
-    note(
-        "Một khách chỉ nên có một bảng riêng. Nhiều bảng cho cùng khách thì "
-        "không rõ bảng nào được áp."
+    field(
+        "Khách hàng",
+        "quyết định bảng này áp cho ai, là trường quan trọng nhất. Để trống thì "
+        "đây là bảng chuẩn công ty, áp cho mọi khách chưa có bảng riêng. Chọn "
+        "khách thì thành bảng riêng, chỉ khách đó dùng và được ưu tiên hơn bảng "
+        "chuẩn.",
     )
+    note("Một khách chỉ nên có một bảng riêng, nhiều bảng thì không rõ bảng nào được áp.")
 
     # ═════════════ 13.5 ═════════════
     h("13.5 Thêm dòng giá", 2)
     img("m05-them-dong-gia.png", "Hình 22 — Hộp thoại thêm dòng giá")
     p(
-        "Mỗi dòng là một mức giá bán. Bảng giá chỉ chứa ĐƠN GIÁ, không chứa số "
+        "Mỗi dòng là một mức giá bán. Bảng giá chỉ chứa đơn giá, không chứa số "
         "lượng — số lượng thuộc về từng hợp đồng cụ thể."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Tên dòng giá ✱",
-                "Phân biệt các mức giá khác nhau trong cùng một loại lao động. "
-                "Không có nó thì mỗi loại chỉ bán được một giá",
-                "Thiết kế cấp cao, Thiết kế cấp thường — hai dòng cùng loại "
-                "Thiết kế nhưng khác đơn giá",
-            ],
-            [
-                "Loại dịch vụ ✱",
-                "Khoá gộp báo cáo. Nhiều dòng giá dùng chung một loại là bình thường",
-                "Chọn loại đã khai ở màn Loại dịch vụ",
-            ],
-            [
-                "Cách tính tiền",
-                "Quyết định doanh thu sinh ra thế nào và ai chịu rủi ro khi làm quá",
-                "Theo giờ: làm bao nhiêu tính bấy nhiêu. Trọn gói: giá cố định. "
-                "Phần trăm: ăn theo tổng các hạng mục khác. Không tính tiền: chỉ ghi chi phí",
-            ],
-            [
-                "Đơn vị",
-                "Đơn vị của đơn giá, ảnh hưởng cách quy đổi khi log giờ",
-                "giờ, ngày, hoặc gói",
-            ],
-            [
-                "Đơn giá ✱",
-                "Tiền bán một đơn vị. Nhân với số lượng ra doanh thu",
-                "Số tiền đã đàm phán với khách",
-            ],
-            [
-                "Giá vốn dự kiến",
-                "Cho phép ước lãi NGAY LÚC BÁO GIÁ, chưa cần ai log giờ thật",
-                "Ước chừng chi phí một đơn vị. Để trống thì chỉ biết lãi sau khi có giờ thật",
-            ],
-            [
-                "Giảm giá / phụ giá",
-                "Điều chỉnh so với giá gốc mà vẫn giữ được giá gốc để đối chiếu",
-                "Số âm là giảm giá, dương là cộng thêm. Ví dụ −10 là giảm 10%",
-            ],
-            [
-                "Cho ghi giờ / chi phí",
-                "Quyết định dòng này có nhận log giờ hay phiếu chi không",
-                "Dòng bán theo giờ thì bật ghi giờ. Dòng bản quyền, thiết bị thì "
-                "bật ghi chi phí",
-            ],
-        ],
-        widths=W,
+    field(
+        "Tên dòng giá",
+        "phân biệt các mức giá khác nhau trong cùng một loại lao động. Không có "
+        "nó thì mỗi loại chỉ bán được một giá. Ví dụ “Thiết kế cấp cao” và "
+        "“Thiết kế cấp thường” cùng thuộc loại Thiết kế nhưng khác đơn giá.",
+        required=True,
+    )
+    field(
+        "Loại dịch vụ",
+        "khoá gộp báo cáo. Nhiều dòng giá dùng chung một loại là bình thường.",
+        required=True,
+    )
+    field(
+        "Cách tính tiền",
+        "quyết định doanh thu sinh ra thế nào và ai chịu rủi ro khi làm quá. "
+        "Theo giờ: làm bao nhiêu tính bấy nhiêu. Trọn gói: giá cố định, vượt thì "
+        "công ty chịu. Phần trăm: ăn theo tổng các hạng mục khác. Không tính "
+        "tiền: chỉ ghi chi phí.",
+    )
+    field("Đơn vị", "đơn vị của đơn giá: giờ, ngày, hoặc gói.")
+    field(
+        "Đơn giá",
+        "tiền bán một đơn vị, nhân với số lượng ra doanh thu.",
+        required=True,
+    )
+    field(
+        "Giá vốn dự kiến",
+        "cho phép ước lãi ngay lúc báo giá, chưa cần ai log giờ thật. Để trống "
+        "thì chỉ biết lãi sau khi có giờ thật.",
+    )
+    field(
+        "Giảm giá hoặc phụ giá",
+        "điều chỉnh so với giá gốc mà vẫn giữ được giá gốc để đối chiếu. Số âm "
+        "là giảm, dương là cộng thêm — ví dụ −10 là giảm 10%.",
+    )
+    field(
+        "Cho ghi giờ và chi phí",
+        "quyết định dòng này có nhận log giờ hay phiếu chi không. Dòng bán theo "
+        "giờ thì bật ghi giờ, dòng bản quyền hay thiết bị thì bật ghi chi phí.",
     )
 
     # ═════════════ 13.6 ═════════════
@@ -218,61 +178,52 @@ def build(g):
     h("13.6 Thêm mức giá vốn", 2)
     img("m06-them-muc-gia-von.png", "Hình 23 — Hộp thoại thêm mức giá vốn")
     p(
-        "Giá vốn trả lời: một giờ của người này tốn công ty bao nhiêu. Đây là "
-        "vế thứ hai để tính lãi — giá bán gắn vào hạng mục, giá vốn gắn vào con "
-        "người."
+        "Giá vốn trả lời: một giờ của người này tốn công ty bao nhiêu. Đây là vế "
+        "thứ hai để tính lãi — giá bán gắn vào hạng mục, giá vốn gắn vào con người."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Kỳ lương",
-                "Cho biết số tiền nhập vào là lương của bao lâu, để hệ thống quy ra giờ",
-                "Theo giờ / tuần / hai tuần / tháng / năm. Chọn đúng kiểu hợp đồng lao động",
-            ],
-            [
-                "Số tiền ✱",
-                "Lương trọn một kỳ, chưa chia giờ",
-                "Nhập nguyên lương kỳ. Hệ thống tự chia theo lịch làm việc bên dưới",
-            ],
-            [
-                "Tiền tệ",
-                "Phân biệt khi thuê người nước ngoài",
-                "VND, USD, EUR",
-            ],
-            [
-                "Lịch làm việc ✱",
-                "Mẫu số của phép chia. Cùng mức lương, ai làm ít giờ hơn thì giá "
-                "vốn mỗi giờ cao hơn",
-                "Số giờ từng ngày trong tuần. Tổng phải khác 0. Người làm bán "
-                "thời gian thì điền ít giờ hơn",
-            ],
-            [
-                "Áp dụng từ ✱",
-                "Mốc bắt đầu hiệu lực. Giờ log trước ngày này vẫn tính theo mức cũ",
-                "Ngày mức lương này có hiệu lực thật, không phải ngày nhập liệu",
-            ],
-            [
-                "Kết thúc",
-                "Cho phép hẹn trước ngày đổi lương mà không cần nhớ vào sửa",
-                "Để trống nghĩa là còn hiệu lực đến nay. Điền khi đã biết trước ngày đổi",
-            ],
-            [
-                "Cộng chi phí gián tiếp",
-                "Phân bổ tiền văn phòng, phần mềm, bộ phận hỗ trợ vào giá vốn mỗi giờ",
-                "BẬT cho nhân viên chính thức. TẮT cho cộng tác viên vì họ không "
-                "dùng văn phòng, không có bộ phận hỗ trợ",
-            ],
-            [
-                "Ghi chú",
-                "Giải thích lý do đổi mức, hữu ích khi soát lại sau vài tháng",
-                "Tăng lương giữa năm, Lập trình viên cấp cao",
-            ],
-        ],
-        widths=W,
+    field(
+        "Kỳ lương",
+        "cho biết số tiền nhập vào là lương của bao lâu, để hệ thống quy ra giờ. "
+        "Chọn theo giờ, tuần, hai tuần, tháng hoặc năm cho khớp hợp đồng lao động.",
+    )
+    field(
+        "Số tiền",
+        "lương trọn một kỳ, chưa chia giờ. Hệ thống tự chia theo lịch làm việc "
+        "bên dưới.",
+        required=True,
+    )
+    field("Tiền tệ", "phân biệt khi thuê người nước ngoài: VND, USD, EUR.")
+    field(
+        "Lịch làm việc",
+        "mẫu số của phép chia. Cùng mức lương, ai làm ít giờ hơn thì giá vốn mỗi "
+        "giờ cao hơn. Điền số giờ từng ngày trong tuần, tổng phải khác 0. Người "
+        "làm bán thời gian thì điền ít giờ hơn.",
+        required=True,
+    )
+    field(
+        "Áp dụng từ",
+        "mốc bắt đầu hiệu lực. Giờ log trước ngày này vẫn tính theo mức cũ. Điền "
+        "ngày mức lương có hiệu lực thật, không phải ngày nhập liệu.",
+        required=True,
+    )
+    field(
+        "Kết thúc",
+        "cho phép hẹn trước ngày đổi lương mà không cần nhớ vào sửa. Để trống "
+        "nghĩa là còn hiệu lực đến nay.",
+    )
+    field(
+        "Cộng chi phí gián tiếp",
+        "phân bổ tiền văn phòng, phần mềm và bộ phận hỗ trợ vào giá vốn mỗi giờ. "
+        "Bật cho nhân viên chính thức, tắt cho cộng tác viên vì họ không dùng "
+        "văn phòng và không có bộ phận hỗ trợ.",
+    )
+    field(
+        "Ghi chú",
+        "giải thích lý do đổi mức, hữu ích khi soát lại sau vài tháng: “Tăng "
+        "lương giữa năm”, “Lập trình viên cấp cao”.",
     )
     note(
-        "Thêm mức mới KHÔNG xoá mức cũ. Hệ thống giữ cả lịch sử, giờ log ở quá "
+        "Thêm mức mới không xoá mức cũ. Hệ thống giữ cả lịch sử, giờ log ở quá "
         "khứ vẫn tính theo mức đang hiệu lực lúc đó — nên báo cáo cũ không bị "
         "thay đổi khi tăng lương."
     )
@@ -285,84 +236,64 @@ def build(g):
         "Hợp đồng là nơi ra lãi lỗ. Mỗi hợp đồng tính riêng, nên dự án dài nên "
         "chia thành nhiều hợp đồng theo giai đoạn để biết chặng nào lỗ."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Tên hợp đồng ✱",
-                "Nhận diện trong danh sách và trong mọi báo cáo",
-                "Kèm giai đoạn nếu dự án chia chặng: Core Banking — Giai đoạn 1",
-            ],
-            [
-                "Khách hàng ✱",
-                "Quyết định BẢNG GIÁ nào được áp khi rút hạng mục",
-                "Chọn khách đã khai. Khách chưa có bảng riêng thì rơi về giá chuẩn công ty",
-            ],
-            [
-                "Số hợp đồng",
-                "Đối chiếu với hồ sơ giấy và kế toán",
-                "Mã nội bộ: HD-2026-001",
-            ],
-            [
-                "Từ ngày / Đến ngày",
-                "Cơ sở cảnh báo cạn ngân sách. Hệ thống so ngày dự báo cạn với "
-                "ngày kết thúc để báo sớm",
-                "Khoảng thời gian theo hợp đồng ký. Để trống thì mất cảnh báo này",
-            ],
-        ],
-        widths=W,
+    field(
+        "Tên hợp đồng",
+        "nhận diện trong danh sách và trong mọi báo cáo. Kèm giai đoạn nếu dự án "
+        "chia chặng: “Core Banking — Giai đoạn 1”.",
+        required=True,
+    )
+    field(
+        "Khách hàng",
+        "quyết định bảng giá nào được áp khi rút hạng mục. Khách chưa có bảng "
+        "riêng thì rơi về giá chuẩn công ty.",
+        required=True,
+    )
+    field("Số hợp đồng", "đối chiếu với hồ sơ giấy và kế toán, ví dụ HD-2026-001.")
+    field(
+        "Từ ngày và Đến ngày",
+        "cơ sở cảnh báo cạn ngân sách. Hệ thống so ngày dự báo cạn với ngày kết "
+        "thúc để báo sớm. Để trống thì mất cảnh báo này.",
     )
 
     # ═════════════ 13.8 ═════════════
     h("13.8 Hai đường thêm hạng mục", 2)
-    p(
-        "Cả hai nút nằm dưới từng nhóm trong tab Hạng mục. Khác nhau ở chỗ giá "
-        "lấy từ đâu."
-    )
+    p("Cả hai nút nằm dưới từng nhóm trong tab Hạng mục, khác nhau ở chỗ giá lấy từ đâu.")
 
     img("m08-them-hang-muc-trong.png", "Hình 25 — Hạng mục mới, nhập tay từ đầu")
     p("Dùng khi có khoản thoả thuận riêng không nằm trong biểu giá chuẩn.")
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Tên hạng mục ✱",
-                "Tên việc cụ thể bán cho khách này, hiện trên hoá đơn và báo cáo",
-                "Mô tả công việc thật: Đọc chip CCCD qua NFC",
-            ],
-            [
-                "Loại dịch vụ ✱",
-                "Để gộp báo cáo theo mảng, độc lập với việc nó nằm nhóm nào",
-                "Chọn loại lao động tương ứng",
-            ],
-            [
-                "Cách tính tiền",
-                "Quyết định ai chịu rủi ro khi làm quá dự kiến",
-                "Xem mục 6.3 để chọn đúng",
-            ],
-            [
-                "Số lượng / Tỷ lệ ✱",
-                "Nhân với đơn giá ra thành tiền. Đồng thời là TRẦN giờ được ghi nhận",
-                "Kiểu Phần trăm thì ô này là tỷ lệ %, không phải số lượng",
-            ],
-            [
-                "Đơn vị, Đơn giá ✱",
-                "Cặp quyết định thành tiền",
-                "Ẩn khi chọn kiểu Phần trăm vì loại đó ăn theo tổng",
-            ],
-            [
-                "Giờ dự kiến",
-                "Cơ sở dự báo tiến độ, tách khỏi số lượng đã bán",
-                "Để trống thì lấy bằng số lượng. Điền khác khi ước lượng nội bộ "
-                "khác con số bán cho khách",
-            ],
-            [
-                "Cho ghi giờ / chi phí",
-                "Chặn ghi nhầm vào hạng mục không phù hợp",
-                "Bật tắt lại được sau bằng hai icon trên bảng",
-            ],
-        ],
-        widths=W,
+    field(
+        "Tên hạng mục",
+        "tên việc cụ thể bán cho khách này, hiện trên hoá đơn và báo cáo. Mô tả "
+        "công việc thật: “Đọc chip CCCD qua NFC”.",
+        required=True,
+    )
+    field(
+        "Loại dịch vụ",
+        "để gộp báo cáo theo mảng, độc lập với việc nó nằm nhóm nào.",
+        required=True,
+    )
+    field("Cách tính tiền", "quyết định ai chịu rủi ro khi làm quá dự kiến, xem mục 6.3.")
+    field(
+        "Số lượng hoặc Tỷ lệ",
+        "nhân với đơn giá ra thành tiền, đồng thời là trần giờ được ghi nhận. "
+        "Kiểu Phần trăm thì ô này là tỷ lệ phần trăm, không phải số lượng.",
+        required=True,
+    )
+    field(
+        "Đơn vị và Đơn giá",
+        "cặp quyết định thành tiền. Ẩn khi chọn kiểu Phần trăm vì loại đó ăn "
+        "theo tổng các hạng mục khác.",
+        required=True,
+    )
+    field(
+        "Giờ dự kiến",
+        "cơ sở dự báo tiến độ, tách khỏi số lượng đã bán. Để trống thì lấy bằng "
+        "số lượng. Điền khác khi ước lượng nội bộ khác con số bán cho khách.",
+    )
+    field(
+        "Cho ghi giờ và chi phí",
+        "chặn ghi nhầm vào hạng mục không phù hợp. Bật tắt lại được sau bằng hai "
+        "icon trên bảng.",
     )
 
     img("m09-rut-tu-bang-gia.png", "Hình 26 — Rút từ bảng giá")
@@ -371,7 +302,7 @@ def build(g):
         "tính tiền. Chỉ cần nhập số lượng."
     )
     note(
-        "Đây là đường NÊN DÙNG khi giá đã đàm phán và ghi trong bảng giá. Nhập "
+        "Đây là đường nên dùng khi giá đã đàm phán và ghi trong bảng giá. Nhập "
         "tay lại dễ sai số, mà sai đơn giá thì sai luôn báo cáo lãi lỗ."
     )
 
@@ -383,34 +314,29 @@ def build(g):
         "Giờ là nguyên liệu của mọi con số. Không ai ghi giờ thì hệ thống không "
         "biết chi phí thật, và báo cáo lãi lỗ chỉ là dự toán."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Hạng mục ✱",
-                "Nói cho hệ thống biết giờ này thuộc hợp đồng nào, tính vào doanh "
-                "thu và chi phí của ai",
-                "Chỉ hiện hạng mục đang bật “cho ghi giờ”. Không thấy hạng mục "
-                "cần tìm thì kiểm tra icon đồng hồ trên bảng hạng mục",
-            ],
-            [
-                "Ngày ✱",
-                "Quyết định giờ này rơi vào kỳ báo cáo nào, và tính theo mức giá "
-                "vốn đang hiệu lực ngày đó",
-                "Mặc định hôm nay. Ghi bù ngày cũ thì sửa lại cho đúng",
-            ],
-            [
-                "Thời lượng ✱",
-                "Số phút thật đã làm. Nhân với giá vốn ra chi phí",
-                "Ba cách nhập: 2h30 · 9-5 · 150. Xem mục 7.2",
-            ],
-            [
-                "Ghi chú",
-                "Giải thích việc đã làm, hiện trong báo cáo và khi quản lý duyệt",
-                "Ngắn gọn nhưng đủ để người khác hiểu: “Sửa lỗi đọc chip lô 3”",
-            ],
-        ],
-        widths=W,
+    field(
+        "Hạng mục",
+        "nói cho hệ thống biết giờ này thuộc hợp đồng nào, tính vào doanh thu và "
+        "chi phí của ai. Chỉ hiện hạng mục đang bật “cho ghi giờ” — không thấy "
+        "hạng mục cần tìm thì kiểm tra icon đồng hồ trên bảng hạng mục.",
+        required=True,
+    )
+    field(
+        "Ngày",
+        "quyết định giờ này rơi vào kỳ báo cáo nào, và tính theo mức giá vốn "
+        "đang hiệu lực ngày đó. Mặc định hôm nay, ghi bù ngày cũ thì sửa lại.",
+        required=True,
+    )
+    field(
+        "Thời lượng",
+        "số phút thật đã làm, nhân với giá vốn ra chi phí. Ba cách nhập: 2h30 · "
+        "9-5 · 150, xem mục 7.2.",
+        required=True,
+    )
+    field(
+        "Ghi chú",
+        "giải thích việc đã làm, hiện trong báo cáo và khi quản lý duyệt. Ngắn "
+        "gọn nhưng đủ để người khác hiểu: “Sửa lỗi đọc chip lô 3”.",
     )
 
     # ═════════════ 13.10 ═════════════
@@ -421,32 +347,26 @@ def build(g):
         "công ty và trong chi tiết công việc. Có nó thì ghi nhầm không phải xoá "
         "đi làm lại, giữ được lịch sử."
     )
-    table(
-        ["Sửa được", "Hệ thống làm gì kèm theo", "Lưu ý"],
-        [
-            [
-                "Hạng mục",
-                "TÍNH LẠI chi phí theo giá vốn của hợp đồng mới",
-                "Vì cùng một người có thể có mức giá vốn riêng cho từng hợp đồng",
-            ],
-            [
-                "Ngày",
-                "Chuyển dòng giờ sang kỳ báo cáo khác",
-                "Kiểm tra lại nếu ngày mới rơi vào mức giá vốn khác",
-            ],
-            [
-                "Thời lượng",
-                "Cập nhật cả giờ tính tiền nếu hạng mục có tính tiền",
-                "Có nút chuyển sang nhập khoảng giờ, khi đó lưu luôn giờ bắt đầu "
-                "để block đứng đúng chỗ trên lịch",
-            ],
-            ["Ghi chú", "Không ảnh hưởng số liệu", "Sửa tự do"],
-        ],
-        widths=[3.2, 6.6, 6.6],
+    field(
+        "Hạng mục",
+        "đổi hạng mục thì chi phí được tính lại theo giá vốn của hợp đồng mới, "
+        "vì cùng một người có thể có mức giá vốn riêng cho từng hợp đồng.",
     )
+    field(
+        "Ngày",
+        "chuyển dòng giờ sang kỳ báo cáo khác. Kiểm tra lại nếu ngày mới rơi vào "
+        "mức giá vốn khác.",
+    )
+    field(
+        "Thời lượng",
+        "cập nhật cả giờ tính tiền nếu hạng mục có tính tiền. Có nút chuyển sang "
+        "nhập khoảng giờ, khi đó lưu luôn giờ bắt đầu để block đứng đúng chỗ "
+        "trên lịch.",
+    )
+    field("Ghi chú", "sửa tự do, không ảnh hưởng số liệu.")
     note(
-        "Dòng ĐÃ DUYỆT bị khoá, không sửa được. Phải bỏ duyệt trước — để số "
-        "liệu đã chốt không bị đổi sau lưng người duyệt.",
+        "Dòng đã duyệt bị khoá, không sửa được. Phải bỏ duyệt trước — để số liệu "
+        "đã chốt không bị đổi sau lưng người duyệt.",
         "warn",
     )
 
@@ -455,81 +375,64 @@ def build(g):
     h("13.11 Thêm chi phí", 2)
     img("m12-them-chi-phi.png", "Hình 29 — Hộp thoại thêm chi phí")
     p(
-        "Chi phí là tiền chi ra NGOÀI lương: thầu phụ, bản quyền, thiết bị, đi "
+        "Chi phí là tiền chi ra ngoài lương: thầu phụ, bản quyền, thiết bị, đi "
         "lại. Không ghi vào đây thì báo cáo lãi bị thổi phồng."
     )
-    table(
-        ["Trường", "Sinh ra để làm gì", "Cách điền"],
-        [
-            [
-                "Người nộp ✱",
-                "Truy ai chịu trách nhiệm khoản chi, và ai được hoàn tiền nếu ứng trước",
-                "Người bỏ tiền ra hoặc người đứng tên phiếu",
-            ],
-            [
-                "Ngày chi ✱",
-                "Quyết định chi phí rơi vào kỳ báo cáo nào",
-                "Ngày phát sinh thật, không phải ngày nhập liệu",
-            ],
-            [
-                "Nhà cung cấp",
-                "Đối chiếu công nợ và tra lại khi cần",
-                "Tên bên nhận tiền: Oracle Việt Nam, FPT Telecom",
-            ],
-            [
-                "Hoàn ứng",
-                "Phân biệt ai là người phải trả tiền: công ty trả thẳng nhà cung "
-                "cấp, hay hoàn lại cho nhân viên đã ứng",
-                "Chọn CÓ thì cột thanh toán đổi nhãn thành Chưa hoàn / Đã hoàn — "
-                "cùng một cột, cách gọi khác vì người nhận tiền khác",
-            ],
-            [
-                "Hạn thanh toán",
-                "Theo dõi công nợ sắp đến hạn",
-                "Ngày phải trả theo hợp đồng với nhà cung cấp",
-            ],
-            [
-                "Tiền tệ",
-                "Phân biệt khi thuê thầu nước ngoài",
-                "VND, USD, EUR",
-            ],
-            [
-                "Tệp đính kèm",
-                "Chứng từ để kế toán đối chiếu",
-                "Tên file hoá đơn",
-            ],
-            [
-                "Hạng mục ✱",
-                "Nói cho hệ thống biết chi phí này thuộc hợp đồng nào",
-                "Chỉ hiện hạng mục đang bật “cho ghi chi phí”",
-            ],
-            [
-                "Nội dung ✱",
-                "Mô tả hiện ở cột đầu bảng, để nhận ra phiếu khi soát",
-                "Nói rõ mua gì: “Bản quyền nền tảng lõi — đợt 1”",
-            ],
-            [
-                "Các dòng chi ✱",
-                "Tách một phiếu thành nhiều khoản để khai đúng thuế từng khoản",
-                "Chuyến công tác gồm vé, khách sạn, taxi — ba dòng, mỗi dòng đơn "
-                "giá và thuế riêng",
-            ],
-            [
-                "Đơn giá đã gồm thuế",
-                "Cho phép nhập theo con số ghi trên hoá đơn, khỏi tự trừ ngược",
-                "Tích khi hoá đơn ghi giá đã bao gồm VAT",
-            ],
-            [
-                "Phụ giá",
-                "Phần cộng thêm khi tính lại cho khách — đây là lãi từ chi phí",
-                "Cộng phần trăm hoặc cộng số tiền cố định. Tính trên TIỀN TRƯỚC "
-                "THUẾ, không tính trên tiền đã gồm thuế",
-            ],
-        ],
-        widths=W,
+    field(
+        "Người nộp",
+        "truy ai chịu trách nhiệm khoản chi, và ai được hoàn tiền nếu ứng trước.",
+        required=True,
+    )
+    field(
+        "Ngày chi",
+        "quyết định chi phí rơi vào kỳ báo cáo nào. Điền ngày phát sinh thật, "
+        "không phải ngày nhập liệu.",
+        required=True,
+    )
+    field(
+        "Nhà cung cấp",
+        "đối chiếu công nợ và tra lại khi cần: Oracle Việt Nam, FPT Telecom.",
+    )
+    field(
+        "Hoàn ứng",
+        "phân biệt ai phải trả tiền — công ty trả thẳng nhà cung cấp, hay hoàn "
+        "lại cho nhân viên đã ứng. Chọn Có thì cột thanh toán đổi nhãn thành "
+        "“Chưa hoàn / Đã hoàn”: cùng một cột, cách gọi khác vì người nhận tiền khác.",
+    )
+    field("Hạn thanh toán", "theo dõi công nợ sắp đến hạn theo hợp đồng với nhà cung cấp.")
+    field("Tiền tệ", "phân biệt khi thuê thầu nước ngoài: VND, USD, EUR.")
+    field("Tệp đính kèm", "chứng từ để kế toán đối chiếu, điền tên file hoá đơn.")
+    field(
+        "Hạng mục",
+        "nói cho hệ thống biết chi phí này thuộc hợp đồng nào. Chỉ hiện hạng mục "
+        "đang bật “cho ghi chi phí”.",
+        required=True,
+    )
+    field(
+        "Nội dung",
+        "mô tả hiện ở cột đầu bảng để nhận ra phiếu khi soát. Nói rõ mua gì: "
+        "“Bản quyền nền tảng lõi — đợt 1”.",
+        required=True,
+    )
+    field(
+        "Các dòng chi",
+        "tách một phiếu thành nhiều khoản để khai đúng thuế từng khoản. Chuyến "
+        "công tác gồm vé, khách sạn, taxi là ba dòng, mỗi dòng đơn giá và thuế riêng.",
+        required=True,
+    )
+    field(
+        "Đơn giá đã gồm thuế",
+        "cho phép nhập theo con số ghi trên hoá đơn, khỏi tự trừ ngược. Tích khi "
+        "hoá đơn ghi giá đã bao gồm VAT.",
+    )
+    field(
+        "Phụ giá",
+        "phần cộng thêm khi tính lại cho khách, đây là lãi từ chi phí. Cộng phần "
+        "trăm hoặc cộng số tiền cố định. Tính trên tiền trước thuế, không tính "
+        "trên tiền đã gồm thuế.",
     )
     note(
-        "Trạng thái DUYỆT quyết định số liệu: phiếu chờ duyệt đã tính vào chi "
-        "phí nhưng CHƯA sinh doanh thu. Nguyên tắc thận trọng — ghi chi phí sớm "
+        "Trạng thái duyệt quyết định số liệu: phiếu chờ duyệt đã tính vào chi "
+        "phí nhưng chưa sinh doanh thu. Nguyên tắc thận trọng — ghi chi phí sớm "
         "nhất, ghi doanh thu muộn nhất. Xem mục 9.2.",
     )
