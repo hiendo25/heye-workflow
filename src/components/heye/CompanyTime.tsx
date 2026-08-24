@@ -8,6 +8,7 @@ import {
   Search,
   SlidersHorizontal,
   Table2,
+  Pencil,
   Undo2,
   X,
 } from "lucide-react";
@@ -53,6 +54,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { EditEntryDialog } from "@/components/heye/EditEntryDialog";
 import type { Ticket, User } from "@/lib/heye-data";
 
 /**
@@ -74,6 +76,7 @@ export function CompanyTime({
   onUnapprove,
   onRequestChange,
   onDelete,
+  onUpdate,
 }: {
   data: FinanceData;
   users: User[];
@@ -84,11 +87,13 @@ export function CompanyTime({
   onUnapprove: (id: string) => void;
   onRequestChange: (id: string, note: string) => void;
   onDelete: (id: string) => void;
+  onUpdate: (id: string, v: Record<string, unknown>) => void;
 }) {
   const [cursor, setCursor] = useState(new Date());
   // Hai chế độ như Productive: lưới tuần trả lời "ai thiếu giờ", bảng phẳng
   // trả lời "dòng giờ nào thoả điều kiện này".
   const [mode, setMode] = useState<"sheet" | "table">("sheet");
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [cell, setCell] = useState<{ userId: string; date?: string } | null>(null);
   const [adding, setAdding] = useState<{ userId: string; date: string } | null>(null);
 
@@ -175,6 +180,7 @@ export function CompanyTime({
           entries={inWeek}
           onApprove={onApprove}
           onUnapprove={onUnapprove}
+          onEditEntry={setEditEntry}
         />
       ) : (
         /* Lưới tuần: hàng là người, cột là ngày */
@@ -299,6 +305,13 @@ export function CompanyTime({
         </p>
       )}
 
+      <EditEntryDialog
+        entry={editEntry}
+        data={data}
+        onClose={() => setEditEntry(null)}
+        onSave={(v) => editEntry && onUpdate(editEntry.id, v)}
+      />
+
       {cell && (
         <EntriesSheet
           data={data}
@@ -374,12 +387,14 @@ function TableView({
   entries,
   onApprove,
   onUnapprove,
+  onEditEntry,
 }: {
   data: FinanceData;
   users: User[];
   entries: TimeEntry[];
   onApprove: (ids: string[]) => void;
   onUnapprove: (id: string) => void;
+  onEditEntry: (e: TimeEntry) => void;
 }) {
   const [group, setGroup] = useState<GroupKey>("person");
   const [fields, setFields] = useState<Set<FieldKey>>(
@@ -589,6 +604,7 @@ function TableView({
                     <th className="border-b border-line px-3 py-2 text-left font-bold">Ghi chú</th>
                   )}
                   <th className="border-b border-line px-3 py-2 text-center font-bold">Duyệt</th>
+                  <th className="border-b border-line px-2 py-2" />
                 </tr>
               </thead>
 
@@ -687,6 +703,20 @@ function TableView({
                                 title="Duyệt dòng này"
                               >
                                 chờ duyệt
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            {/* Quản lý sửa hộ dòng giờ người khác — hay gặp khi
+                                nhân sự ghi nhầm hạng mục rồi nghỉ phép. */}
+                            {!e.approved_at && (
+                              <button
+                                type="button"
+                                onClick={() => onEditEntry(e)}
+                                className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                                title="Sửa dòng giờ"
+                              >
+                                <Pencil size={13} />
                               </button>
                             )}
                           </td>

@@ -47,6 +47,11 @@ function Index() {
     mutationFn: async (id: string) => deleteRow("time_entries", id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
   });
+  const editTime = useMutation({
+    mutationFn: async ({ id, v }: { id: string; v: Record<string, unknown> }) =>
+      updateRow("time_entries", id, v),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["finance"] }),
+  });
 
   // Bấm giờ ngay trên công việc. Mỗi người một đồng hồ nên phải dừng cái
   // đang chạy trước khi bật cái mới.
@@ -280,6 +285,7 @@ function Index() {
             nsId={data?.namespace?.id ?? ""}
             onLogTime={(v) => logTime.mutate(v)}
             onDeleteTime={(id) => delTime.mutate(id)}
+            onUpdateTime={(id, v) => editTime.mutate({ id, v })}
             onStartFresh={(v) => startFresh.mutate(v)}
             onSavePlan={(v) => savePlan.mutate({ id: open.ticket.id, v })}
             onStartTimer={(id) => startTimer.mutate(id)}

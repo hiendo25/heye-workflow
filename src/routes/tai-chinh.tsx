@@ -2058,6 +2058,7 @@ function CompanyPanel({
           }
         })
       }
+      onUpdate={(id, v) => save.mutate(() => updateRow("time_entries", id, v))}
       onUnapprove={(id) =>
         save.mutate(() =>
           updateRow("time_entries", id, { approved_at: null, approved_by: null }),

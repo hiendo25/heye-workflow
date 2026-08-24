@@ -9,13 +9,23 @@ import {
   Pin,
   Copy as CopyIcon,
   History,
+  MoreHorizontal,
+  Pencil,
   Play,
   Plus,
   Square,
   Table2,
   Trash2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { EditEntryDialog } from "@/components/heye/EditEntryDialog";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -86,6 +96,7 @@ export function MyTime({
   const [cursor, setCursor] = useState(new Date());
   const [adding, setAdding] = useState<{ date: string; serviceId?: string | undefined } | null>(null);
   // Hạng mục đã ghim — giữ ở máy người dùng, không cần bảng riêng.
+  const [editing, setEditing] = useState<TimeEntry | null>(null);
   const [pinned, setPinned] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("heye.pinnedServices") ?? "[]") as string[];
@@ -254,8 +265,29 @@ export function MyTime({
           onCopyYesterday={onCopyYesterday}
           pinned={pinned}
           onTogglePin={togglePin}
+          onEditEntry={setEditing}
+          onDuplicate={(e) =>
+            onSave({
+              namespace_id: e.namespace_id,
+              user_id: e.user_id,
+              service_id: e.service_id,
+              ticket_id: e.ticket_id,
+              date: e.date,
+              minutes: e.minutes,
+              billable_minutes: e.billable_minutes,
+              note: e.note,
+              cost_rate_snapshot: e.cost_rate_snapshot,
+            })
+          }
         />
       )}
+
+      <EditEntryDialog
+        entry={editing}
+        data={data}
+        onClose={() => setEditing(null)}
+        onSave={(v) => editing && onUpdate(editing.id, v)}
+      />
 
       {adding && currentUser && (
         <EntryDialog
@@ -294,6 +326,8 @@ function DayView({
   onCopyYesterday,
   pinned,
   onTogglePin,
+  onEditEntry,
+  onDuplicate,
 }: {
   data: FinanceData;
   tickets: Ticket[];
@@ -308,6 +342,8 @@ function DayView({
   onCopyYesterday: (rows: TimeEntry[]) => void;
   pinned: string[];
   onTogglePin: (serviceId: string) => void;
+  onEditEntry: (e: TimeEntry) => void;
+  onDuplicate: (e: TimeEntry) => void;
 }) {
   // Giờ của hôm qua — để chép sang hôm nay cho việc lặp lại hằng ngày.
   const yesterday = useMemo(() => {
@@ -397,6 +433,10 @@ function DayView({
                 onUpdate={(v) => onUpdate(e.id, v)}
                 onStartTimer={() => onStartTimer(e.id)}
                 onStopTimer={() => onStopTimer(e.id)}
+                onEdit={() => onEditEntry(e)}
+                onDuplicate={() => onDuplicate(e)}
+                onPin={() => onTogglePin(e.service_id)}
+                pinned={pinned.includes(e.service_id)}
                 isToday={date === isoDate(new Date())}
               />
             ))}
@@ -415,6 +455,10 @@ function EntryRow({
   onUpdate,
   onStartTimer,
   onStopTimer,
+  onEdit,
+  onDuplicate,
+  onPin,
+  pinned,
   isToday,
 }: {
   entry: TimeEntry;
@@ -424,6 +468,10 @@ function EntryRow({
   onUpdate: (v: Record<string, unknown>) => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onPin: () => void;
+  pinned: boolean;
   isToday: boolean;
 }) {
   const [dur, setDur] = useState(fmtDuration(entry.minutes));
@@ -485,15 +533,33 @@ function EntryRow({
           className="num h-8 w-[76px] text-center text-[13.5px] font-semibold"
         />
 
+        {/* Menu ba chấm như Productive: Sửa · Nhân bản · Ghim · Xoá.
+            Trước đây chỉ có nút Xoá, nên ghi nhầm hạng mục là phải xoá rồi ghi
+            lại từ đầu. */}
         {!locked && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="mt-1 rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
-            aria-label="Xoá dòng giờ"
-          >
-            <Trash2 size={13} />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="mt-1 rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+              aria-label="Tuỳ chọn dòng giờ"
+            >
+              <MoreHorizontal size={15} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[170px]">
+              <DropdownMenuItem onSelect={onEdit}>
+                <Pencil size={14} /> Sửa
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onDuplicate}>
+                <CopyIcon size={14} /> Nhân bản
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onPin}>
+                <Pin size={14} /> {pinned ? "Bỏ ghim hạng mục" : "Ghim hạng mục"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onDelete} className="text-bad focus:text-bad">
+                <Trash2 size={14} /> Xoá
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 

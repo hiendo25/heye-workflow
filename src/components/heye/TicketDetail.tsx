@@ -11,6 +11,7 @@ import {
   Square,
   Tag as TagIcon,
   Trash2,
+  Pencil,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,9 @@ import {
   type Budget,
   type BudgetService,
   type FinanceData,
+  type TimeEntry,
 } from "@/lib/finance-data";
+import { EditEntryDialog } from "@/components/heye/EditEntryDialog";
 import { PRIORITY_LABEL, type Status, type Tag, type Ticket, type User } from "@/lib/heye-data";
 
 /**
@@ -67,6 +70,7 @@ export function TicketDetail({
   onSetService,
   onLogTime,
   onDeleteTime,
+  onUpdateTime,
   onStartTimer,
   onStopTimer,
   onStartFresh,
@@ -85,6 +89,7 @@ export function TicketDetail({
   onSetService: (serviceId: string | null) => void;
   onLogTime: (v: Record<string, unknown>) => void;
   onDeleteTime: (id: string) => void;
+  onUpdateTime: (id: string, v: Record<string, unknown>) => void;
   onStartTimer: (entryId: string) => void;
   onStopTimer: (entryId: string) => void;
   /** Bấm giờ khi chưa có dòng nào — tự tạo dòng 0 phút rồi chạy. */
@@ -96,6 +101,7 @@ export function TicketDetail({
 }) {
   const [saving, setSaving] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   // Trạng thái cho hàng nhập giờ inline
   const [qDate, setQDate] = useState(isoDate(new Date()));
   const [qNote, setQNote] = useState("");
@@ -377,14 +383,25 @@ export function TicketDetail({
                           {fmtDuration(e.minutes)}
                         </span>
                         {!locked && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteTime(e.id)}
-                            className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
-                            aria-label="Xoá dòng giờ"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditEntry(e)}
+                              className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+                              aria-label="Sửa dòng giờ"
+                              title="Sửa"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteTime(e.id)}
+                              className="rounded p-1 text-ink-3 hover:bg-bad-soft hover:text-bad"
+                              aria-label="Xoá dòng giờ"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
                         )}
                       </div>
                     );
@@ -469,6 +486,13 @@ export function TicketDetail({
           </aside>
         </div>
       </div>
+
+      <EditEntryDialog
+        entry={editEntry}
+        data={data}
+        onClose={() => setEditEntry(null)}
+        onSave={(v) => editEntry && onUpdateTime(editEntry.id, v)}
+      />
 
       {logging && current && (
         <LogTimeDialog
