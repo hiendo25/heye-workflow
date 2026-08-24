@@ -65,7 +65,6 @@ def build(g):
         ("10", "Màn 8 — Biểu đồ và báo cáo", "Đọc số ra quyết định"),
         ("11", "Quy tắc nghiệp vụ quan trọng", "Những điều dễ hiểu sai"),
         ("12", "Danh mục case dữ liệu mẫu", "Đối chiếu khi kiểm thử"),
-        ("13", "Việc còn tồn và giới hạn", "Minh bạch phạm vi"),
     ]
     table(
         ["#", "Nội dung", "Tóm tắt"],
