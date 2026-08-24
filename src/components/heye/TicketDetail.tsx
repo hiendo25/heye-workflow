@@ -96,6 +96,10 @@ export function TicketDetail({
 }) {
   const [saving, setSaving] = useState(false);
   const [logging, setLogging] = useState(false);
+  // Trạng thái cho hàng nhập giờ inline
+  const [qDate, setQDate] = useState(isoDate(new Date()));
+  const [qNote, setQNote] = useState("");
+  const [qDur, setQDur] = useState("");
   // Đã có đồng hồ chạy trên công việc này chưa
   const running = data.timeEntries.some(
     (e) => e.ticket_id === ticket.id && e.timer_started_at,
@@ -105,6 +109,28 @@ export function TicketDetail({
   const budgets = data.budgets.filter((b) => b.project_id === projectId);
   const options = data.services.filter((s) => budgets.some((b) => b.id === s.budget_id));
   const current = data.services.find((s) => s.id === ticket.budget_service_id) ?? null;
+
+  /** Lưu hàng nhập inline rồi dọn ô để nhập tiếp. */
+  const saveQuick = () => {
+    const mins = parseDuration(qDur);
+    if (!mins || !current) return;
+    const uid = allUsers[0]?.id ?? "";
+    onLogTime({
+      namespace_id: nsId,
+      user_id: uid,
+      service_id: current.id,
+      ticket_id: ticket.id,
+      date: qDate,
+      minutes: mins,
+      billable_minutes: current.billing_type === "non_billable" ? 0 : mins,
+      note: qNote.trim() || null,
+      cost_rate_snapshot: Math.round(
+        costRateFor(data, uid, { onDate: qDate, budgetId: current.budget_id }).total,
+      ),
+    });
+    setQDur("");
+    setQNote("");
+  };
   const currentBudget = current ? budgets.find((b) => b.id === current.budget_id) : null;
 
   const entries = data.timeEntries.filter((e) => e.ticket_id === ticket.id);
@@ -246,16 +272,43 @@ export function TicketDetail({
                     <Play size={13} /> Bấm giờ
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!current}
-                  onClick={() => setLogging(true)}
-                  title={current ? "" : "Gán hạng mục trước khi ghi giờ"}
-                >
-                  <Plus size={13} /> Ghi tay
-                </Button>
               </div>
+
+              {/* Hàng nhập INLINE, không mở hộp thoại — Productive nhập thẳng
+                  trên tab Time: người · ngày · ghi chú · thời lượng · Lưu. */}
+              {current && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-line bg-bg/40 px-4 py-2.5">
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                    style={{ backgroundColor: allUsers[0]?.avatar_color ?? "#8B87A0" }}
+                    title={allUsers[0]?.full_name}
+                  >
+                    {allUsers[0]?.initial ?? "?"}
+                  </span>
+                  <Input
+                    type="date"
+                    value={qDate}
+                    onChange={(e) => setQDate(e.target.value)}
+                    className="h-8 w-[140px] text-[12.5px]"
+                  />
+                  <Input
+                    value={qNote}
+                    placeholder="Ghi chú"
+                    onChange={(e) => setQNote(e.target.value)}
+                    className="h-8 min-w-[140px] flex-1 text-[12.5px]"
+                  />
+                  <Input
+                    value={qDur}
+                    placeholder="2h30 hoặc 9-5"
+                    onChange={(e) => setQDur(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveQuick()}
+                    className="num h-8 w-[130px] text-[12.5px]"
+                  />
+                  <Button size="sm" disabled={!parseDuration(qDur)} onClick={saveQuick}>
+                    Lưu
+                  </Button>
+                </div>
+              )}
 
               {entries.length === 0 ? (
                 <p className="px-4 py-4 text-[12px] text-ink-3">
@@ -280,6 +333,19 @@ export function TicketDetail({
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="text-[12.5px] font-medium">{who?.full_name ?? "—"}</div>
+                          <div className="truncate text-[11px] text-ink-3">
+                            {/* Productive hiện tên hợp đồng và hạng mục trên
+                                từng dòng — một việc có thể log vào nhiều hạng
+                                mục khác nhau, không nhìn thấy thì không biết
+                                giờ đó đang tính vào đâu. */}
+                            {(() => {
+                              const sv = data.services.find((x) => x.id === e.service_id);
+                              const bg = sv
+                                ? data.budgets.find((x) => x.id === sv.budget_id)
+                                : null;
+                              return [bg?.name, sv?.name].filter(Boolean).join(" · ");
+                            })()}
+                          </div>
                           <div className="truncate text-[11px] text-ink-3">
                             {fmtDay(e.date)}
                             {e.note ? ` · ${e.note}` : ""}
@@ -323,6 +389,18 @@ export function TicketDetail({
                       </div>
                     );
                   })}
+
+                  {/* Hàng TỔNG cuối danh sách: giờ làm / giờ tính tiền */}
+                  <div className="flex items-center gap-2.5 border-t border-line bg-bg/40 px-4 py-2">
+                    <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-ink-3">
+                      Tổng
+                    </span>
+                    <span className="num text-[12.5px] font-semibold">
+                      {fmtDuration(entries.reduce((a, e) => a + e.minutes, 0))}
+                      <span className="mx-1 text-ink-3">/</span>
+                      {fmtDuration(entries.reduce((a, e) => a + (e.billable_minutes ?? 0), 0))}
+                    </span>
+                  </div>
                 </div>
               )}
             </section>
