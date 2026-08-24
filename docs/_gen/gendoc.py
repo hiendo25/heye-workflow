@@ -120,19 +120,25 @@ def table(headers, rows, widths=None, small=False):
         cells = t.add_row().cells
         for i, v in enumerate(row):
             cells[i].text = ""
-            par = cells[i].paragraphs[0]
-            par.paragraph_format.space_after = Pt(1)
-            txt = str(v)
-            bold = txt.startswith("**") and txt.endswith("**")
-            if bold:
-                txt = txt.strip("*")
-            r = par.add_run(txt)
-            r.font.size = size
-            r.bold = bold
-            if txt.startswith("✗") or txt.startswith("Thiếu"):
-                r.font.color.rgb = BAD
-            elif txt.startswith("✓"):
-                r.font.color.rgb = GOOD
+            # Ô có thể nhiều dòng, mỗi dòng tự quyết định in đậm hay không.
+            # Kiểm tra ** trên cả chuỗi thì dòng thứ hai làm hỏng phép so sánh,
+            # kết quả là dấu ** lọt nguyên vào tài liệu.
+            lines = str(v).splitlines() or [""]
+            for k, line in enumerate(lines):
+                par = cells[i].paragraphs[0] if k == 0 else cells[i].add_paragraph()
+                par.paragraph_format.space_after = Pt(1)
+                # Tách theo cặp ** để in đậm được cả cụm nằm GIỮA câu,
+                # ví dụ "Doanh thu **+750.000 đ**" — không chỉ cả dòng.
+                for j, seg in enumerate(line.split("**")):
+                    if not seg:
+                        continue
+                    r = par.add_run(seg)
+                    r.font.size = size
+                    r.bold = j % 2 == 1  # đoạn lẻ nằm giữa cặp ** thì in đậm
+                    if seg.startswith("✗") or seg.startswith("Thiếu"):
+                        r.font.color.rgb = BAD
+                    elif seg.startswith("✓"):
+                        r.font.color.rgb = GOOD
     if widths:
         for i, w in enumerate(widths):
             for row in t.rows:
