@@ -1136,6 +1136,9 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
     contractTotal,
     usedBudget,
     remainingBudget: contractTotal - usedBudget,
+    // Doanh thu từ chi phí tính lại cho khách. Khoản này nằm NGOÀI hợp đồng
+    // gốc nên có thể đẩy "đã dùng" vượt trần mà không phải là làm lỗ.
+    expenseRevenue,
     revenue: totalRevenue,
     laborCost,
     expenseCost,

@@ -217,6 +217,13 @@ export function BudgetOverview({
                 tone={shownRemaining < 0 ? "bad" : undefined}
               />
               <Bar pct={100 - budgetPct} />
+              {shownRemaining < 0 && s.expenseRevenue > 0 && (
+                <p className="mt-1.5 text-[11px] leading-snug text-ink-3">
+                  Vượt trần vì chi phí tính lại cho khách{" "}
+                  <b className="num">{money(Math.round(s.expenseRevenue))}</b> nằm ngoài hợp đồng
+                  gốc — khoản này thu thêm, không phải làm lỗ.
+                </p>
+              )}
             </Box>
 
             {/* Ô thứ ba: Productive để INVOICING ở đây, nhưng bên mình chưa
@@ -777,7 +784,7 @@ function Chart({
               textAnchor="middle"
               transform={`rotate(-90 ${cutX} ${pad.t + 46})`}
             >
-              {grainLabel} hiện tại
+              Hiện tại
             </text>
           </g>
         )}
@@ -811,7 +818,7 @@ function Chart({
               textAnchor="middle"
               transform={`rotate(-90 ${x(pickedIdx)} ${pad.t + 48})`}
             >
-              {grainLabel} đang chọn
+              Đang chọn
             </text>
           </g>
         )}
@@ -981,9 +988,9 @@ function Row({
     tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "";
   return (
     <div className="flex items-baseline justify-between py-[3px]">
-      <span className="text-[12.5px] text-ink-2">
-        {label}
-        {en && <span className="ml-1.5 text-[11px] text-ink-3">{en}</span>}
+      <span className="flex items-baseline text-[12.5px] text-ink-2">
+        <span className="whitespace-nowrap">{label}</span>
+        {en && <span className="ml-1.5 whitespace-nowrap text-[11px] text-ink-3">{en}</span>}
       </span>
       <span className={`num ${big ? "text-[15px] font-bold" : "text-[13px]"} ${c}`}>{value}</span>
     </div>

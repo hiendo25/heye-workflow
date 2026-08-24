@@ -161,7 +161,9 @@ export function BudgetDetail({
   // Tạo hạng mục trống — khác đường rút từ bảng giá
   const [blankIn, setBlankIn] = useState<string | null>(null);
   const [cols, setCols] = useState<Set<ColKey>>(
-    new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
+    // Đơn vị luôn hiện ở Productive — thiếu nó thì nhìn bảng không biết dòng
+    // bán theo giờ, ngày hay trọn gói.
+    new Set(["desc", "unit", "track", "estimate", "quantity", "price", "total"]),
   );
 
   const client = data.clients.find((c) => c.id === budget.client_id);
@@ -695,7 +697,9 @@ function SectionRows({
                 {/* Hạng mục phần trăm: số lượng CHÍNH LÀ tỷ lệ phần trăm */}
                 {s.billing_type === "percentage"
                   ? `${s.quantity} %`
-                  : `${s.quantity} ${UNIT_LABEL[s.unit] ?? s.unit}`}
+                  : on("unit")
+                    ? s.quantity
+                    : `${s.quantity} ${UNIT_LABEL[s.unit] ?? s.unit}`}
               </td>
             )}
             {on("price") && (
