@@ -2,7 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Archive,
+  ArrowLeft,
+  Copy,
+  MoreHorizontal,
+  Plus,
   ArchiveRestore,
   Building2,
   Clock,
@@ -480,6 +491,50 @@ function TypesPanel({
   );
 }
 
+/** Menu Đổi tên · Nhân bản · Lưu trữ · Xoá cho một bảng giá — đúng 4 mục
+ *  của Productive. Trước đây chỉ có nút Xoá, và bảng chuẩn công ty thì không
+ *  sửa được gì cả. */
+function RateCardMenu({
+  card,
+  onRename,
+  onDuplicate,
+  onArchive,
+  onDelete,
+}: {
+  card: RateCard;
+  onRename: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-1 text-ink-3 hover:bg-brand-soft hover:text-brand"
+        aria-label="Tuỳ chọn bảng giá"
+      >
+        <MoreHorizontal size={15} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[170px]">
+        <DropdownMenuItem onSelect={onRename}>
+          <Pencil size={14} /> Đổi tên
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onDuplicate}>
+          <Copy size={14} /> Nhân bản
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onArchive}>
+          {card.is_archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+          {card.is_archived ? "Bỏ lưu trữ" : "Lưu trữ"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onDelete} className="text-bad focus:text-bad">
+          <Trash2 size={14} /> Xoá
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /**
  * Gán nhân sự vào loại dịch vụ.
  *
@@ -735,9 +790,19 @@ function RatesPanel({
   const [cardEdit, setCardEdit] = useState<RateCard | "new" | null>(null);
   const [cardDel, setCardDel] = useState<RateCard | null>(null);
   const [lineFor, setLineFor] = useState<{ card: RateCard; itemId?: string } | null>(null);
+  // Bảng giá đang mở. null = đang ở màn DANH SÁCH.
+  //
+  // Trước đây tôi đổ hết mọi bảng và mọi dòng giá của chúng vào một trang
+  // phẳng — có 5 bảng thì phải cuộn qua cả trăm dòng mới thấy bảng cuối.
+  // Productive tách hai tầng: danh sách bảng trước, bấm vào mới xem dòng giá.
+  const [openCard, setOpenCard] = useState<string | null>(null);
+  const [showArchivedCards, setShowArchivedCards] = useState(false);
 
   const visible = data.rateCards.filter(
-    (c) => !c.is_archived && (clientId === null || c.client_id === null || c.client_id === clientId),
+    (c) =>
+      (showArchivedCards || !c.is_archived) &&
+      (clientId === null || c.client_id === null || c.client_id === clientId) &&
+      (openCard === null || c.id === openCard),
   );
   const standard = data.rateCards.find((c) => c.client_id === null && !c.is_archived) ?? null;
   const stdPrice = new Map(
@@ -768,7 +833,113 @@ function RatesPanel({
           ))}
         </div>
 
-        {visible.map((card) => {
+        {/* Màn DANH SÁCH: bảng Tên · Số dòng giá · Trạng thái · Ngày tạo */}
+        {openCard === null && (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wider text-ink-3">
+                  <th className="border-b border-line px-4 py-2 text-left font-bold">Tên bảng giá</th>
+                  <th className="border-b border-line px-3 py-2 text-left font-bold">Áp dụng cho</th>
+                  <th className="border-b border-line px-3 py-2 text-right font-bold">Số dòng giá</th>
+                  <th className="border-b border-line px-3 py-2 text-center font-bold">Trạng thái</th>
+                  <th className="border-b border-line px-3 py-2 text-left font-bold">Ngày tạo</th>
+                  <th className="border-b border-line px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((card) => {
+                  const n = data.rateCardItems.filter((i) => i.rate_card_id === card.id).length;
+                  const cl = data.clients.find((c) => c.id === card.client_id);
+                  return (
+                    <tr
+                      key={card.id}
+                      onClick={() => setOpenCard(card.id)}
+                      className="cursor-pointer border-b border-line last:border-0 hover:bg-brand-soft/25"
+                    >
+                      <td className="px-4 py-2.5 font-medium">{card.name}</td>
+                      <td className="px-3 py-2.5 text-[12.5px] text-ink-2">
+                        {cl ? cl.name : "Mọi khách chưa có bảng riêng"}
+                      </td>
+                      <td className="num px-3 py-2.5 text-right">{n}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold ${
+                            card.is_archived ? "bg-line text-ink-3" : "bg-good-soft text-good"
+                          }`}
+                        >
+                          {card.is_archived ? "lưu trữ" : "đang dùng"}
+                        </span>
+                      </td>
+                      <td className="num px-3 py-2.5 text-[12px] text-ink-3">
+                        {card.created_at?.slice(0, 10) ?? "—"}
+                      </td>
+                      <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                        <RateCardMenu
+                          card={card}
+                          onRename={() => setCardEdit(card)}
+                          onDuplicate={() =>
+                            save.mutate(async () => {
+                              const created = await insertReturning("rate_cards", {
+                                namespace_id: nsId,
+                                name: `Bản sao của ${card.name}`,
+                                client_id: card.client_id,
+                              });
+                              if (!created) return;
+                              for (const it of data.rateCardItems.filter(
+                                (i) => i.rate_card_id === card.id,
+                              )) {
+                                const { id, rate_card_id, ...rest } = it;
+                                void id;
+                                void rate_card_id;
+                                await insertRow("rate_card_items", {
+                                  ...rest,
+                                  rate_card_id: created.id,
+                                });
+                              }
+                            })
+                          }
+                          onArchive={() =>
+                            save.mutate(() =>
+                              updateRow("rate_cards", card.id, { is_archived: !card.is_archived }),
+                            )
+                          }
+                          onDelete={() => setCardDel(card)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="flex items-center justify-between px-4 py-3">
+              <Button size="sm" onClick={() => setCardEdit("new")}>
+                <Plus size={14} /> Thêm bảng giá
+              </Button>
+              <button
+                type="button"
+                onClick={() => setShowArchivedCards((v) => !v)}
+                className="text-[12.5px] text-ink-2 hover:text-brand"
+              >
+                {showArchivedCards ? "Ẩn mục lưu trữ" : "Xem mục lưu trữ"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {openCard !== null && (
+          <button
+            type="button"
+            onClick={() => setOpenCard(null)}
+            className="m-3 inline-flex items-center gap-1.5 text-[12.5px] text-ink-2 hover:text-brand"
+          >
+            <ArrowLeft size={14} /> Tất cả bảng giá
+          </button>
+        )}
+
+        {openCard !== null &&
+          visible.map((card) => {
           const items = data.rateCardItems.filter((i) => i.rate_card_id === card.id);
           const client = data.clients.find((c) => c.id === card.client_id);
           const isStd = card.client_id === null;
@@ -863,7 +1034,10 @@ function RatesPanel({
                         className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
                         style={{ background: st?.color }}
                       />
-                      {st?.name ?? "—"}
+                      {it.name ?? st?.name ?? "—"}
+                      {it.name && st && (
+                        <span className="ml-2 text-[11.5px] text-ink-3">{st.name}</span>
+                      )}
                       {it.billing_type && it.billing_type !== "tm" && (
                         <span className="ml-2 rounded bg-line px-1.5 py-0.5 text-[10.5px] text-ink-3">
                           {BILLING_LABEL[it.billing_type]}
@@ -888,14 +1062,19 @@ function RatesPanel({
       </SettingsPanel>
 
       <RateCardDialog
-        key={cardEdit === "new" ? "new-card" : "closed-card"}
+        key={cardEdit === "new" ? "new-card" : (cardEdit?.id ?? "closed-card")}
         open={cardEdit !== null}
+        card={cardEdit === "new" ? null : cardEdit}
         clients={data.clients}
         onClose={() => setCardEdit(null)}
         onSubmit={(v) =>
-          save.mutate(() => insertRow("rate_cards", { ...v, namespace_id: nsId }), {
-            onSuccess: () => setCardEdit(null),
-          })
+          save.mutate(
+            () =>
+              cardEdit && cardEdit !== "new"
+                ? updateRow("rate_cards", cardEdit.id, v)
+                : insertRow("rate_cards", { ...v, namespace_id: nsId }),
+            { onSuccess: () => setCardEdit(null) },
+          )
         }
       />
 
@@ -933,23 +1112,26 @@ function RatesPanel({
 
 function RateCardDialog({
   open,
+  card,
   clients,
   onClose,
   onSubmit,
 }: {
   open: boolean;
+  /** Có giá trị = đang sửa bảng có sẵn; null = tạo mới. */
+  card: RateCard | null;
   clients: ClientCompany[];
   onClose: () => void;
   onSubmit: (v: Record<string, unknown>) => void;
 }) {
-  const [name, setName] = useState("");
-  const [client, setClient] = useState<string>("none");
+  const [name, setName] = useState(card?.name ?? "");
+  const [client, setClient] = useState<string>(card?.client_id ?? "none");
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Thêm bảng giá</DialogTitle>
+          <DialogTitle>{card ? "Sửa bảng giá" : "Thêm bảng giá"}</DialogTitle>
           <DialogDescription>
             Để trống khách hàng nếu đây là bảng giá chuẩn dùng chung cho cả công ty.
           </DialogDescription>
@@ -1025,13 +1207,12 @@ function RateLineDialog({
   );
   const [allowTime, setAllowTime] = useState(existing?.allow_time ?? true);
   const [allowExp, setAllowExp] = useState(existing?.allow_expense ?? false);
+  const [lineName, setLineName] = useState(existing?.name ?? "");
 
-  const used = new Set(
-    data.rateCardItems
-      .filter((i) => i.rate_card_id === target?.card.id && i.id !== target?.itemId)
-      .map((i) => i.service_type_id),
-  );
-  const options = data.serviceTypes.filter((s) => !s.is_archived && !used.has(s.id));
+  // Không lọc bỏ loại đã dùng nữa: một loại được phép có NHIỀU dòng giá, vì
+  // đó chính là cách bán phổ biến — Senior Design và Junior Design cùng thuộc
+  // loại Design nhưng khác đơn giá. Phân biệt bằng TÊN DÒNG chứ không bằng loại.
+  const options = data.serviceTypes.filter((s) => !s.is_archived);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -1039,20 +1220,25 @@ function RateLineDialog({
         <DialogHeader>
           <DialogTitle>{existing ? "Sửa dòng giá" : "Thêm dòng giá"}</DialogTitle>
           <DialogDescription>
-            Mỗi loại dịch vụ chỉ có một dòng trong bảng — đây là đơn giá bán cho khách.
+            Một loại dịch vụ có thể có nhiều dòng giá khác nhau — đặt tên để phân biệt, ví dụ
+            Thiết kế cấp cao và Thiết kế cấp thường.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <Field label="Tên dòng giá" required>
+            <Input
+              value={lineName}
+              placeholder="Thiết kế cấp cao"
+              onChange={(e) => setLineName(e.target.value)}
+            />
+          </Field>
           <Field label="Loại dịch vụ" required>
-            <Select value={typeId} onValueChange={setTypeId} disabled={!!existing}>
+            <Select value={typeId} onValueChange={setTypeId}>
               <SelectTrigger>
                 <SelectValue placeholder="Chọn loại dịch vụ" />
               </SelectTrigger>
               <SelectContent>
-                {(existing
-                  ? data.serviceTypes.filter((s) => s.id === existing.service_type_id)
-                  : options
-                ).map((s) => (
+                {options.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name}
                   </SelectItem>
@@ -1178,9 +1364,10 @@ function RateLineDialog({
             Huỷ
           </Button>
           <Button
-            disabled={!typeId || !price}
+            disabled={!typeId || !price || !lineName.trim()}
             onClick={() =>
               onSubmit({
+                name: lineName.trim(),
                 service_type_id: typeId,
                 unit,
                 price: Number(price),

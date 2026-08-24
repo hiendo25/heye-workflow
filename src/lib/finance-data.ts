@@ -43,11 +43,19 @@ export type RateCard = {
   currency: string;
   is_archived: boolean;
   note: string | null;
+  created_at: string | null;
 };
 
 export type RateCardItem = {
   id: string;
   rate_card_id: string;
+  /**
+   * Tên dòng giá, tách khỏi loại dịch vụ.
+   *
+   * Nhờ tách mà một loại có nhiều mức giá: "Senior Design" và "Junior Design"
+   * cùng thuộc loại Design nhưng khác đơn giá. null thì lùi về tên loại.
+   */
+  name: string | null;
   service_type_id: string;
   unit: "hour" | "day" | "piece";
   price: number;

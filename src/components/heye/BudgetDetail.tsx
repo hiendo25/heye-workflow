@@ -157,6 +157,8 @@ export function BudgetDetail({
   const [newSection, setNewSection] = useState(false);
   const [view, setView] = useState<TabKey>("overview");
   const [sideOpen, setSideOpen] = useState(true);
+  // Tạo hạng mục trống — khác đường rút từ bảng giá
+  const [blankIn, setBlankIn] = useState<string | null>(null);
   const [cols, setCols] = useState<Set<ColKey>>(
     new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
   );
@@ -444,6 +446,7 @@ export function BudgetDetail({
                     onCancelRename={() => setRenaming(null)}
                     onRemoveSection={() => onDeleteSection(sec.id)}
                     onAdd={() => setAdding(sec.id)}
+                    onAddBlank={() => setBlankIn(sec.id)}
                     onEdit={setEditingId}
                     onDelete={onDeleteService}
                   />
@@ -460,6 +463,7 @@ export function BudgetDetail({
                   data={data}
                   cols={cols}
                   onAdd={() => setAdding("root")}
+                  onAddBlank={() => setBlankIn("root")}
                   onEdit={setEditingId}
                   onDelete={onDeleteService}
                 />
@@ -509,6 +513,16 @@ export function BudgetDetail({
         budget={budget}
         sectionId={adding === "root" ? null : adding}
         onClose={() => setAdding(null)}
+        onSubmit={onAddService}
+      />
+
+      <BlankServiceDialog
+        key={blankIn ?? "closed-blank"}
+        open={blankIn !== null}
+        data={data}
+        budget={budget}
+        sectionId={blankIn === "root" ? null : blankIn}
+        onClose={() => setBlankIn(null)}
         onSubmit={onAddService}
       />
 
@@ -583,6 +597,7 @@ function SectionRows({
   onCancelRename,
   onRemoveSection,
   onAdd,
+  onAddBlank,
   onEdit,
   onDelete,
   onPatch,
@@ -601,6 +616,8 @@ function SectionRows({
   onCancelRename?: () => void;
   onRemoveSection?: () => void;
   onAdd: () => void;
+  /** Tạo hạng mục trống, không rút từ bảng giá. */
+  onAddBlank: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   /** Sửa nhanh một trường ngay trên bảng, dùng cho hai icon Theo dõi. */
@@ -802,16 +819,33 @@ function SectionRows({
         );
       })}
 
-      {rows.length === 0 && (
-        <tr>
-          <td colSpan={span} className="px-4 py-3 text-[12.5px] text-ink-3">
-            Nhóm này chưa có hạng mục.{" "}
-            <button type="button" onClick={onAdd} className="font-medium text-brand hover:underline">
-              Thêm hạng mục
+      {/* Cặp nút dưới TỪNG nhóm, đúng như Productive: nút mặc định tạo hạng
+          mục trống, nút phụ mới là rút từ bảng giá. Trước đây chỉ có một nút
+          chung trên toolbar và luôn bắt rút bảng giá — không tạo được hạng
+          mục ad-hoc, mà việc đó thì hay gặp. */}
+      <tr>
+        <td colSpan={span} className="px-4 py-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onAddBlank}
+              className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand hover:underline"
+            >
+              <Plus size={13} /> Hạng mục mới
             </button>
-          </td>
-        </tr>
-      )}
+            <button
+              type="button"
+              onClick={onAdd}
+              className="inline-flex items-center gap-1 text-[12.5px] font-medium text-ink-2 hover:text-brand"
+            >
+              <Plus size={13} /> Rút từ bảng giá
+            </button>
+            {rows.length === 0 && (
+              <span className="text-[12px] text-ink-3">Nhóm này chưa có hạng mục.</span>
+            )}
+          </div>
+        </td>
+      </tr>
     </>
   );
 }
@@ -866,7 +900,8 @@ function ServiceDialog({
     const it = data.rateCardItems.find((i) => i.id === id);
     if (!it) return;
     const t = data.serviceTypes.find((s) => s.id === it.service_type_id);
-    if (t && !name) setName(it.description?.trim() || t.name);
+    // Tên dòng giá là thứ người dùng đặt, ưu tiên nó trước mô tả và tên loại
+    if (!name) setName(it.name?.trim() || it.description?.trim() || t?.name || "");
     setBilling(it.billing_type ?? (it.unit === "piece" ? "fixed" : "tm"));
     setAllowTime(it.allow_time ?? true);
     setAllowExpense(it.allow_expense ?? it.unit === "piece");
@@ -912,9 +947,15 @@ function ServiceDialog({
                 <SelectContent>
                   {items.map((i) => {
                     const t = data.serviceTypes.find((s) => s.id === i.service_type_id);
+                    // Hiện TÊN DÒNG, không phải tên loại: hai dòng cùng loại
+                    // mà hiện tên loại thì trông y hệt nhau, không chọn đúng được.
                     return (
                       <SelectItem key={i.id} value={i.id}>
-                        {t?.name} — {money(Math.round(effectivePrice(i)))}/{UNIT_LABEL[i.unit]}
+                        {i.name ?? t?.name} — {money(Math.round(effectivePrice(i)))}/
+                        {UNIT_LABEL[i.unit] ?? i.unit}
+                        {i.name && t && (
+                          <span className="ml-1.5 text-[11px] text-ink-3">{t.name}</span>
+                        )}
                       </SelectItem>
                     );
                   })}
@@ -1076,6 +1117,176 @@ function Check({
 }
 
 /* -------- Sửa hạng mục: số lượng, giá, cách tính, nhóm -------- */
+
+/**
+ * Tạo hạng mục TRỐNG, không rút từ bảng giá.
+ *
+ * Productive đặt đây làm nút mặc định ("New item"), rút bảng giá chỉ là nút
+ * phụ. Trước đây tôi chỉ có đường rút bảng giá, nên mọi hạng mục ad-hoc —
+ * một khoản thoả thuận riêng, một phần việc phát sinh — đều phải tạo dòng giá
+ * giả trong bảng giá trước, rất ngược.
+ */
+function BlankServiceDialog({
+  open,
+  data,
+  budget,
+  sectionId,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  data: FinanceData;
+  budget: Budget;
+  sectionId: string | null;
+  onClose: () => void;
+  onSubmit: (v: Record<string, unknown>) => void;
+}) {
+  const [name, setName] = useState("");
+  const [typeId, setTypeId] = useState("");
+  const [billing, setBilling] = useState<BillingType>("tm");
+  const [unit, setUnit] = useState<"hour" | "day" | "piece">("hour");
+  const [qty, setQty] = useState("");
+  const [price, setPrice] = useState("");
+  const [estimate, setEstimate] = useState("");
+  const [allowTime, setAllowTime] = useState(true);
+  const [allowExpense, setAllowExpense] = useState(false);
+
+  const types = data.serviceTypes.filter((t) => !t.is_archived);
+  const isPct = billing === "percentage";
+  const ok = name.trim() && typeId && qty && (isPct || price);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Hạng mục mới</DialogTitle>
+          <DialogDescription>
+            Tạo thẳng một hạng mục cho hợp đồng này, không lấy từ bảng giá. Dùng khi có khoản
+            thoả thuận riêng không nằm trong biểu giá chuẩn.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <L label="Tên hạng mục" required>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </L>
+
+          <div className="grid grid-cols-2 gap-3">
+            <L label="Loại dịch vụ" required>
+              <Select value={typeId} onValueChange={setTypeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn loại" />
+                </SelectTrigger>
+                <SelectContent>
+                  {types.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </L>
+            <L label="Cách tính tiền">
+              <Select value={billing} onValueChange={(v) => setBilling(v as BillingType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(BILLING_LABEL) as BillingType[]).map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {BILLING_LABEL[b]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </L>
+          </div>
+
+          <p className="-mt-1 text-[11.5px] text-ink-3">{BILLING_NOTE[billing]}</p>
+
+          <div className="grid grid-cols-3 gap-3">
+            <L label={isPct ? "Tỷ lệ (%)" : "Số lượng"} required>
+              <Input className="num" value={qty} onChange={(e) => setQty(e.target.value)} />
+            </L>
+            {!isPct && (
+              <>
+                <L label="Đơn vị">
+                  <Select value={unit} onValueChange={(v) => setUnit(v as typeof unit)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hour">giờ</SelectItem>
+                      <SelectItem value="day">ngày</SelectItem>
+                      <SelectItem value="piece">gói</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </L>
+                <L label="Đơn giá" required>
+                  <Input className="num" value={price} onChange={(e) => setPrice(e.target.value)} />
+                </L>
+              </>
+            )}
+          </div>
+
+          <L label="Giờ dự kiến (để trống thì lấy bằng số lượng)">
+            <Input
+              className="num"
+              value={estimate}
+              onChange={(e) => setEstimate(e.target.value)}
+            />
+          </L>
+
+          <div className="flex flex-wrap gap-4 rounded-lg border border-line px-3 py-2.5">
+            <label className="flex items-center gap-2 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={allowTime}
+                onChange={(e) => setAllowTime(e.target.checked)}
+              />
+              Cho ghi giờ
+            </label>
+            <label className="flex items-center gap-2 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={allowExpense}
+                onChange={(e) => setAllowExpense(e.target.checked)}
+              />
+              Cho ghi chi phí
+            </label>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            disabled={!ok}
+            onClick={() => {
+              onSubmit({
+                budget_id: budget.id,
+                section_id: sectionId,
+                name: name.trim(),
+                service_type_id: typeId,
+                billing_type: billing,
+                unit: isPct ? "hour" : unit,
+                quantity: Number(qty),
+                price: isPct ? 0 : Number(price),
+                estimate: estimate ? Number(estimate) : Number(qty),
+                allow_time: allowTime,
+                allow_expense: allowExpense,
+              });
+              onClose();
+            }}
+          >
+            Thêm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function EditServiceDialog({
   open,
