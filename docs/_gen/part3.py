@@ -8,10 +8,10 @@ def build(g):
     )
 
     # ══════════════════ 7. HỢP ĐỒNG ══════════════════
-    h("7. Màn 4 — Hợp đồng", 1)
+    h("6. Màn 4 — Hợp đồng", 1)
     p(
-        "Hợp đồng là nơi ra lãi lỗ. Mỗi hợp đồng tính lãi riêng. Một dự án dài có "
-        "thể chia thành nhiều hợp đồng theo giai đoạn để theo dõi từng chặng."
+        "Mỗi hợp đồng tính lãi riêng. Dự án dài chia thành nhiều hợp đồng theo "
+        "giai đoạn để theo dõi từng chặng."
     )
     img("06-hop-dong-danh-sach.png", "Hình 6 — Danh sách hợp đồng")
     p(
@@ -20,7 +20,7 @@ def build(g):
         "— đúng, vì đây là gói tặng kèm, mọi hạng mục đều để Không tính tiền."
     )
 
-    h("7.1 Vỏ màn hợp đồng", 2)
+    h("6.1 Vỏ màn hợp đồng", 2)
     img("07-hd-tong-quan.png", "Hình 7 — Tab Tổng quan của hợp đồng")
     table(
         ["#", "Thành phần", "Giải thích"],
@@ -49,7 +49,7 @@ def build(g):
         "info",
     )
 
-    h("7.2 Tab Hạng mục — nơi khai những gì đang bán", 2)
+    h("6.2 Tab Hạng mục — nơi khai những gì đang bán", 2)
     img("08-hd-hang-muc.png", "Hình 8 — Tab Hạng mục")
     table(
         ["#", "Cột", "Giải thích"],
@@ -63,7 +63,7 @@ def build(g):
         widths=[1.0, 4.4, 10.8],
     )
 
-    h("7.3 Bốn cách tính tiền", 2)
+    h("6.3 Bốn cách tính tiền", 2)
     table(
         ["Cách tính", "Ai chịu rủi ro khi làm quá", "Dùng khi nào", "Ví dụ thật"],
         [
@@ -103,7 +103,7 @@ def build(g):
         "info",
     )
 
-    h("7.4 Cột Theo dõi — hai icon bấm được", 2)
+    h("6.4 Cột Theo dõi — hai icon bấm được", 2)
     table(
         ["Icon", "Bật nghĩa là", "Tắt nghĩa là"],
         [
@@ -119,7 +119,7 @@ def build(g):
         "info",
     )
 
-    h("7.5 Ước tính và Số lượng khác nhau thế nào", 2)
+    h("6.5 Ước tính và Số lượng khác nhau thế nào", 2)
     table(
         ["", "Số lượng (Qty)", "Ước tính (Estimate)"],
         [
@@ -134,7 +134,7 @@ def build(g):
         widths=[3.4, 6.4, 6.4],
     )
 
-    h("7.6 Hai đường thêm hạng mục", 2)
+    h("6.6 Hai đường thêm hạng mục", 2)
     table(
         ["Nút", "Khi nào dùng"],
         [
@@ -152,10 +152,10 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 8. GIỜ CỦA TÔI ══════════════════
-    h("8. Màn 5 — Giờ của tôi", 1)
+    h("7. Màn 5 — Giờ của tôi", 1)
     p("Nhân viên tự ghi giờ. Có ba chế độ xem cho ba thói quen khác nhau.")
 
-    h("8.1 Chế độ Ngày", 2)
+    h("7.1 Chế độ Ngày", 2)
     img("12-gio-ngay.png", "Hình 9 — Chế độ Ngày")
     p("Phù hợp khi ghi giờ cuối mỗi ngày. Panel trái gợi ý hạng mục hay dùng:")
     bullet("Đã ghim — hạng mục tự ghim để luôn thấy ở đầu")
@@ -165,7 +165,7 @@ def build(g):
         "Bấm “Ghi nhận giờ” hoặc bấm thẳng vào hạng mục ở panel trái để thêm dòng."
     )
 
-    h("8.2 Ba cách nhập thời lượng", 2)
+    h("7.2 Ba cách nhập thời lượng", 2)
     table(
         ["Gõ", "Hiểu thành", "Ghi chú"],
         [
@@ -177,7 +177,7 @@ def build(g):
         widths=[5.2, 3.6, 7.4],
     )
 
-    h("8.3 Menu ba chấm trên mỗi dòng giờ", 2)
+    h("7.3 Menu ba chấm trên mỗi dòng giờ", 2)
     table(
         ["Thao tác", "Giải thích"],
         [
@@ -197,7 +197,7 @@ def build(g):
         "warn",
     )
 
-    h("8.4 Chế độ Bảng chấm công", 2)
+    h("7.4 Chế độ Bảng chấm công", 2)
     img("13-gio-bang-cham-cong.png", "Hình 10 — Chế độ Bảng chấm công")
     p(
         "Phù hợp khi ghi bù cả tuần. Hàng là hạng mục, cột là ngày. Cột Tổng đứng "
@@ -206,7 +206,7 @@ def build(g):
         "chưa có dòng nào."
     )
 
-    h("8.5 Chế độ Lịch", 2)
+    h("7.5 Chế độ Lịch", 2)
     img("14-gio-lich.png", "Hình 11 — Chế độ Lịch")
     p(
         "Lưới giờ theo ngày. Mỗi dòng giờ là một khối đặt đúng vị trí bắt đầu, "
@@ -219,10 +219,10 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 9. GIỜ TOÀN CÔNG TY ══════════════════
-    h("9. Màn 6 — Giờ toàn công ty", 1)
+    h("8. Màn 6 — Giờ toàn công ty", 1)
     p("Dành cho quản lý: theo dõi cả team, ghi hộ người quên, duyệt hàng loạt.")
 
-    h("9.1 Chế độ Bảng chấm công — ai thiếu giờ", 2)
+    h("8.1 Chế độ Bảng chấm công — ai thiếu giờ", 2)
     img("15-gio-cty-cham-cong.png", "Hình 12 — Lưới tuần toàn công ty")
     table(
         ["Màu ô", "Nghĩa là"],
@@ -239,7 +239,7 @@ def build(g):
         "Nút “Duyệt cả tuần” duyệt hàng loạt mọi dòng đang chờ."
     )
 
-    h("9.2 Chế độ Bảng — lọc và gộp nhóm", 2)
+    h("8.2 Chế độ Bảng — lọc và gộp nhóm", 2)
     img("16-gio-cty-bang.png", "Hình 13 — Chế độ Bảng")
     table(
         ["#", "Thành phần", "Giải thích"],
@@ -265,7 +265,7 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 10. CHI PHÍ ══════════════════
-    h("10. Màn 7 — Chi phí", 1)
+    h("9. Màn 7 — Chi phí", 1)
     p(
         "Tiền chi ra ngoài lương: thầu phụ, bản quyền, thiết bị, đi lại. Ghi vào "
         "hạng mục đã bật icon ghi chi phí."
@@ -283,7 +283,7 @@ def build(g):
         widths=[1.0, 3.4, 11.8],
     )
 
-    h("10.1 Hai trục trạng thái độc lập", 2)
+    h("9.1 Hai trục trạng thái độc lập", 2)
     p(
         "Điểm quan trọng nhất của màn này: DUYỆT và THANH TOÁN là hai trục riêng. "
         "Một phiếu có thể đã duyệt mà chưa chi tiền, hoặc đã chi mà chưa duyệt."
@@ -310,7 +310,7 @@ def build(g):
         widths=[3.0, 5.6, 7.6],
     )
 
-    h("10.2 Trạng thái duyệt ảnh hưởng số liệu ra sao", 2)
+    h("9.2 Trạng thái duyệt ảnh hưởng số liệu ra sao", 2)
     table(
         ["Trạng thái", "Tính vào CHI PHÍ", "Tính vào DOANH THU", "Vì sao"],
         [
@@ -332,7 +332,7 @@ def build(g):
         "info",
     )
 
-    h("10.3 Hộp thoại nhập chi phí", 2)
+    h("9.3 Hộp thoại nhập chi phí", 2)
     img("11-dialog-chi-phi.png", "Hình 15 — Hộp thoại Thêm chi phí")
     table(
         ["Nhóm trường", "Gồm những gì", "Lưu ý"],
@@ -375,7 +375,7 @@ def build(g):
         "lắp đặt bằng phụ giá dạng SỐ TIỀN."
     )
 
-    h("10.4 Tab Chi phí trong hợp đồng", 2)
+    h("9.4 Tab Chi phí trong hợp đồng", 2)
     img("09-hd-chi-phi.png", "Hình 16 — Tab Chi phí lọc theo hợp đồng")
     p(
         "Cùng dữ liệu nhưng chỉ hiện phiếu thuộc hợp đồng đang mở, kèm ba ô tổng "

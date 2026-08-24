@@ -11,7 +11,7 @@ def build(g):
     BRAND, MUTED, INK, GOOD, BAD = g.BRAND, g.MUTED, g.INK, g.GOOD, g.BAD
 
     # ══════════════════ BÌA ══════════════════
-    for _ in range(4):
+    for _ in range(5):
         doc.add_paragraph()
     t = doc.add_paragraph()
     t.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -20,31 +20,22 @@ def build(g):
     r.font.size = Pt(30)
     r.font.color.rgb = BRAND
 
-    s = doc.add_paragraph()
-    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = s.add_run("Tài liệu hướng dẫn tính năng và cấu hình")
+    s_ = doc.add_paragraph()
+    s_.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = s_.add_run("Hướng dẫn tính năng và cấu hình")
     r.font.size = Pt(14)
     r.font.color.rgb = MUTED
 
-    doc.add_paragraph()
-    s = doc.add_paragraph()
-    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = s.add_run("Cost Control Module — Feature & Configuration Guide")
-    r.font.size = Pt(11)
-    r.italic = True
-    r.font.color.rgb = MUTED
-
-    for _ in range(6):
+    for _ in range(7):
         doc.add_paragraph()
 
-    tb = doc.add_table(rows=5, cols=2)
+    tb = doc.add_table(rows=4, cols=2)
     tb.alignment = 1
     meta = [
-        ("Phiên bản", "v1.0"),
-        ("Ngày phát hành", "24/08/2026"),
-        ("Đối tượng đọc", "Toàn bộ team — PM, BA, Sale, Kế toán, Dev, QC"),
-        ("Phạm vi", "Module Tài chính: 8 màn hình + cấu hình"),
-        ("Trạng thái", "Đã hoàn thiện, đang chạy trên bản demo"),
+        ("Phiên bản", "v1.0 — 24/08/2026"),
+        ("Đối tượng đọc", "PM, BA, Sale, Kế toán, Dev, QC"),
+        ("Phạm vi", "Module Tài chính — 8 màn hình"),
+        ("Trạng thái", "Đang chạy trên bản demo"),
     ]
     for i, (k, v) in enumerate(meta):
         c0, c1 = tb.rows[i].cells
@@ -62,20 +53,19 @@ def build(g):
     # ══════════════════ MỤC LỤC ══════════════════
     h("Mục lục", 1)
     toc = [
-        ("1", "Vấn đề đang giải quyết", "Vì sao cần module này"),
-        ("2", "Mô hình dữ liệu — 5 khái niệm cốt lõi", "Hiểu đúng trước khi dùng"),
-        ("3", "Hai trục tính tiền: Giá bán và Giá vốn", "Nền tảng của mọi con số"),
-        ("4", "Màn 1 — Loại dịch vụ", "Danh mục gốc, khai một lần"),
-        ("5", "Màn 2 — Bảng giá", "Đơn giá bán theo từng khách"),
-        ("6", "Màn 3 — Giá vốn nhân sự", "Một giờ của mỗi người tốn bao nhiêu"),
-        ("7", "Màn 4 — Hợp đồng", "Nơi ra lãi lỗ"),
-        ("8", "Màn 5 — Giờ của tôi", "Nhân viên ghi giờ"),
-        ("9", "Màn 6 — Giờ toàn công ty", "Quản lý duyệt và ghi hộ"),
-        ("10", "Màn 7 — Chi phí", "Tiền chi ra ngoài lương"),
-        ("11", "Màn 8 — Biểu đồ và báo cáo", "Đọc số ra quyết định"),
-        ("12", "Quy tắc nghiệp vụ quan trọng", "Những điều dễ hiểu sai"),
-        ("13", "Danh mục case dữ liệu mẫu", "Đối chiếu khi kiểm thử"),
-        ("14", "Việc còn tồn và giới hạn", "Minh bạch phạm vi"),
+        ("1", "Mô hình dữ liệu — 5 khái niệm cốt lõi", "Hiểu đúng trước khi dùng"),
+        ("2", "Hai trục tính tiền: Giá bán và Giá vốn", "Nền tảng của mọi con số"),
+        ("3", "Màn 1 — Loại dịch vụ", "Danh mục gốc, khai một lần"),
+        ("4", "Màn 2 — Bảng giá", "Đơn giá bán theo từng khách"),
+        ("5", "Màn 3 — Giá vốn nhân sự", "Một giờ của mỗi người tốn bao nhiêu"),
+        ("6", "Màn 4 — Hợp đồng", "Nơi ra lãi lỗ"),
+        ("7", "Màn 5 — Giờ của tôi", "Nhân viên ghi giờ"),
+        ("8", "Màn 6 — Giờ toàn công ty", "Quản lý duyệt và ghi hộ"),
+        ("9", "Màn 7 — Chi phí", "Tiền chi ra ngoài lương"),
+        ("10", "Màn 8 — Biểu đồ và báo cáo", "Đọc số ra quyết định"),
+        ("11", "Quy tắc nghiệp vụ quan trọng", "Những điều dễ hiểu sai"),
+        ("12", "Danh mục case dữ liệu mẫu", "Đối chiếu khi kiểm thử"),
+        ("13", "Việc còn tồn và giới hạn", "Minh bạch phạm vi"),
     ]
     table(
         ["#", "Nội dung", "Tóm tắt"],
@@ -84,55 +74,9 @@ def build(g):
     )
     pagebreak()
 
-    # ══════════════════ 1. VẤN ĐỀ ══════════════════
-    h("1. Vấn đề đang giải quyết", 1)
-
-    h("1.1 Trước khi có module này", 2)
-    p(
-        "Công ty bán phần mềm và dịch vụ triển khai cho ngân hàng. Mỗi hợp đồng "
-        "kéo dài nhiều tháng, huy động nhiều người với mức lương khác nhau, kèm "
-        "chi phí mua ngoài như bản quyền nền tảng, thuê thầu phụ, công tác phí."
-    )
-    p("Ba câu hỏi sau đây không ai trả lời được bằng số:")
-    bullet("Hợp đồng Sacombank đang lãi hay lỗ, lãi bao nhiêu phần trăm?")
-    bullet("Mảng Kiểm thử của cả công ty năm nay đóng góp bao nhiêu doanh thu?")
-    bullet("Còn bao nhiêu ngân sách trước khi vượt hợp đồng?")
-    p(
-        "Không trả lời được vì ba mảnh dữ liệu nằm rời rạc: giá bán trong file "
-        "báo giá, lương trong bảng lương, giờ làm trong đầu mỗi người. Ghép tay "
-        "thì mất vài ngày, và ghép xong thì số đã cũ."
-    )
-
-    h("1.2 Sau khi có module này", 2)
-    table(
-        ["Câu hỏi", "Trả lời ở đâu", "Mất bao lâu"],
-        [
-            ["Hợp đồng này lãi lỗ ra sao", "Tab Tổng quan của hợp đồng", "Ngay lập tức"],
-            ["Còn bao nhiêu ngân sách", "Ô Ngân sách, có thanh tiến độ", "Ngay lập tức"],
-            ["Khi nào ngân sách cạn", "Cảnh báo đỏ trên biểu đồ", "Ngay lập tức"],
-            ["Ai chưa ghi giờ tuần này", "Giờ toàn công ty, ô đỏ", "Ngay lập tức"],
-            ["Chi phí nào chưa được duyệt", "Màn Chi phí, chip lọc", "Ngay lập tức"],
-            ["Giờ nào làm mà không ra tiền", "Ô Chi phí, dòng Giờ không ra tiền", "Ngay lập tức"],
-        ],
-        widths=[6.2, 6.5, 3.7],
-    )
-
-    h("1.3 Nguyên tắc thiết kế", 2)
-    note(
-        "Module này dựng theo mô hình của Productive.io — phần mềm quản trị công ty "
-        "dịch vụ được dùng rộng rãi trên thế giới. Cách sắp xếp màn hình, tên gọi "
-        "và công thức tính đều bám theo chuẩn đó, nên mỗi nhãn tiếng Việt đều kèm "
-        "thuật ngữ tiếng Anh gốc để đối chiếu khi cần.",
-        "info",
-    )
-    pagebreak()
-
     # ══════════════════ 2. MÔ HÌNH DỮ LIỆU ══════════════════
-    h("2. Mô hình dữ liệu — 5 khái niệm cốt lõi", 1)
-    p(
-        "Đọc kỹ phần này trước khi thao tác. Phần lớn lỗi nhập liệu đến từ việc "
-        "nhầm lẫn giữa năm khái niệm dưới đây."
-    )
+    h("1. Mô hình dữ liệu — 5 khái niệm cốt lõi", 1)
+    p("Phần lớn lỗi nhập liệu đến từ nhầm lẫn giữa năm khái niệm này.")
 
     table(
         ["Khái niệm", "Là gì", "Ví dụ thật trong hệ thống", "Ai quản lý"],
@@ -172,11 +116,8 @@ def build(g):
         small=True,
     )
 
-    h("2.1 Quan hệ giữa chúng", 2)
-    p(
-        "Chuỗi phụ thuộc chạy từ trên xuống. Không có bước trước thì không làm được "
-        "bước sau:"
-    )
+    h("1.1 Quan hệ giữa chúng", 2)
+    p("Không có bước trước thì không làm được bước sau:")
     note(
         "Loại dịch vụ  →  Bảng giá (gán đơn giá cho loại)  →  Hợp đồng  →  "
         "Hạng mục (rút giá từ bảng giá, thêm số lượng)  →  Ghi giờ / Ghi chi phí vào hạng mục",
@@ -189,11 +130,8 @@ def build(g):
         after=2,
     )
 
-    h("2.2 Hai trục độc lập: Loại dịch vụ và Nhóm hạng mục", 2)
-    p(
-        "Đây là điểm hay bị nhầm nhất. Hai trục này vuông góc nhau, không thay thế "
-        "được cho nhau:"
-    )
+    h("1.2 Hai trục độc lập: Loại dịch vụ và Nhóm hạng mục", 2)
+    p("Hai trục vuông góc nhau, không thay thế cho nhau:")
     table(
         ["", "Loại dịch vụ", "Nhóm hạng mục (Section)"],
         [

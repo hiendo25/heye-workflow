@@ -8,11 +8,8 @@ def build(g):
     )
 
     # ══════════════════ 3. HAI TRỤC TÍNH TIỀN ══════════════════
-    h("3. Hai trục tính tiền: Giá bán và Giá vốn", 1)
-    p(
-        "Mọi con số lãi lỗ đều đến từ hiệu của hai trục này. Chúng gắn vào hai thứ "
-        "khác nhau và do hai người khác nhau quản lý."
-    )
+    h("2. Hai trục tính tiền: Giá bán và Giá vốn", 1)
+    p("Lãi lỗ là hiệu của hai trục này. Chúng gắn vào hai thứ khác nhau.")
     table(
         ["", "GIÁ BÁN — Rate", "GIÁ VỐN — Cost rate"],
         [
@@ -34,7 +31,7 @@ def build(g):
         widths=[4.2, 6.1, 6.1],
     )
 
-    h("3.1 Giá vốn được tính thế nào", 2)
+    h("2.1 Giá vốn được tính thế nào", 2)
     p("Công thức: lương một kỳ chia cho số giờ làm việc của trọn kỳ đó.")
     note(
         "Sơn — lương 39.000.000 đ/tháng, làm 8 giờ × 5 ngày mỗi tuần\n"
@@ -50,7 +47,7 @@ def build(g):
         "lên — đúng bản chất, vì vẫn phải trả đủ lương tháng đó."
     )
 
-    h("3.2 Chi phí gián tiếp (Overhead)", 2)
+    h("2.2 Chi phí gián tiếp (Overhead)", 2)
     p(
         "Tiền thuê văn phòng, điện nước, phần mềm dùng chung — không gắn được vào "
         "dự án nào cụ thể nhưng vẫn phải trả. Hệ thống chia đều cho tổng số giờ làm "
@@ -75,10 +72,9 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 4. LOẠI DỊCH VỤ ══════════════════
-    h("4. Màn 1 — Loại dịch vụ", 1)
+    h("3. Màn 1 — Loại dịch vụ", 1)
     p(
-        "Danh mục gốc của toàn hệ thống. Khai một lần, dùng lại cho mọi hợp đồng và "
-        "mọi khách. Đây là trung tâm lợi nhuận: nhờ nó mới gộp được báo cáo "
+        "Khai một lần, dùng cho mọi hợp đồng. Nhờ nó mới gộp được báo cáo "
         "“mảng Kiểm thử lãi bao nhiêu” từ tất cả dự án."
     )
     img("01-loai-dich-vu.png", "Hình 1 — Màn Loại dịch vụ")
@@ -115,7 +111,7 @@ def build(g):
         small=True,
     )
 
-    h("4.1 Menu ba chấm — 4 thao tác", 2)
+    h("3.1 Menu ba chấm — 4 thao tác", 2)
     table(
         ["Thao tác", "Khi nào dùng", "Hệ quả"],
         [
@@ -147,11 +143,10 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 5. BẢNG GIÁ ══════════════════
-    h("5. Màn 2 — Bảng giá", 1)
+    h("4. Màn 2 — Bảng giá", 1)
     p(
-        "Bảng giá chỉ chứa ĐƠN GIÁ, không chứa số lượng. Số lượng thuộc về hợp đồng. "
-        "Nhờ tách như vậy, một bảng giá dùng lại được cho nhiều hợp đồng của cùng "
-        "một khách, không phải nhớ và gõ lại giá đã đàm phán."
+        "Chỉ chứa ĐƠN GIÁ, không chứa số lượng — số lượng thuộc về hợp đồng. "
+        "Nhờ vậy một bảng dùng lại được cho nhiều hợp đồng của cùng một khách."
     )
     img("02-bang-gia-danh-sach.png", "Hình 2 — Danh sách bảng giá")
 
@@ -173,7 +168,7 @@ def build(g):
         widths=[1.0, 4.4, 10.8],
     )
 
-    h("5.1 Bảng chuẩn công ty và bảng riêng khách", 2)
+    h("4.1 Bảng chuẩn công ty và bảng riêng khách", 2)
     table(
         ["Loại bảng", "Khi nào áp dụng", "Ví dụ thật"],
         [
@@ -206,7 +201,7 @@ def build(g):
         widths=[1.0, 4.4, 10.8],
     )
 
-    h("5.2 Vì sao dòng giá cần TÊN RIÊNG", 2)
+    h("4.2 Vì sao dòng giá cần TÊN RIÊNG", 2)
     p(
         "Tên dòng giá tách khỏi loại dịch vụ. Nhờ vậy một loại có nhiều mức giá "
         "khác nhau — cách bán phổ biến nhất:"
@@ -226,7 +221,7 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 6. GIÁ VỐN NHÂN SỰ ══════════════════
-    h("6. Màn 3 — Giá vốn nhân sự", 1)
+    h("5. Màn 3 — Giá vốn nhân sự", 1)
     note(
         "Màn này chỉ quản trị viên xem được. Đây là dữ liệu lương, cần giữ kín.",
         "warn",
@@ -255,7 +250,7 @@ def build(g):
         "Ai không cộng gián tiếp thì chỉ có một số."
     )
 
-    h("6.1 Năm kỳ lương được hỗ trợ", 2)
+    h("5.1 Năm kỳ lương được hỗ trợ", 2)
     table(
         ["Kỳ lương", "Nhập gì", "Ví dụ trong dữ liệu mẫu"],
         [
@@ -287,7 +282,7 @@ def build(g):
         small=True,
     )
 
-    h("6.2 Sáu ô tóm tắt", 2)
+    h("5.2 Sáu ô tóm tắt", 2)
     table(
         ["Ô", "Ý nghĩa"],
         [

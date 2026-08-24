@@ -8,14 +8,14 @@ def build(g):
     )
 
     # ══════════════════ 11. BIỂU ĐỒ ══════════════════
-    h("11. Màn 8 — Biểu đồ và báo cáo", 1)
+    h("10. Màn 8 — Biểu đồ và báo cáo", 1)
     p(
         "Nằm ở tab Tổng quan của hợp đồng. Đây là nơi đọc số ra quyết định, "
         "nên cần hiểu đúng từng thành phần."
     )
     img("07-hd-tong-quan.png", "Hình 17 — Biểu đồ diễn biến (xem lại Hình 7)")
 
-    h("11.1 Bốn nhóm điều khiển", 2)
+    h("10.1 Bốn nhóm điều khiển", 2)
     table(
         ["Nhóm", "Lựa chọn", "Đổi cái gì"],
         [
@@ -43,7 +43,7 @@ def build(g):
         widths=[3.0, 4.4, 8.8],
     )
 
-    h("11.2 Đọc biểu đồ", 2)
+    h("10.2 Đọc biểu đồ", 2)
     table(
         ["Ký hiệu", "Là gì", "Đọc thế nào"],
         [
@@ -66,7 +66,7 @@ def build(g):
         "warn",
     )
 
-    h("11.3 Ba ô số liệu", 2)
+    h("10.3 Ba ô số liệu", 2)
     table(
         ["Ô", "Tab Ngân sách", "Tab Lợi nhuận"],
         [
@@ -89,7 +89,7 @@ def build(g):
         widths=[3.4, 6.4, 6.4],
     )
 
-    h("11.4 Vì sao “Đã dùng” có thể VƯỢT tổng hợp đồng", 2)
+    h("10.4 Vì sao “Đã dùng” có thể VƯỢT tổng hợp đồng", 2)
     p(
         "Số Đã dùng có thể lớn hơn Tổng hợp đồng, làm ô Còn lại ra số âm. "
         "Đây KHÔNG phải lỗi tính."
@@ -108,7 +108,7 @@ def build(g):
         "info",
     )
 
-    h("11.5 Trần giờ ghi nhận", 2)
+    h("10.5 Trần giờ ghi nhận", 2)
     p(
         "Log vượt số lượng đã bán thì phần vượt KHÔNG ra doanh thu. Bán 100 giờ mà "
         "làm 120 giờ thì chỉ 100 giờ được ghi nhận, 20 giờ còn lại là làm không "
@@ -117,10 +117,10 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 12. QUY TẮC NGHIỆP VỤ ══════════════════
-    h("12. Quy tắc nghiệp vụ quan trọng", 1)
+    h("11. Quy tắc nghiệp vụ quan trọng", 1)
     p("Những điều dễ hiểu sai nhất, tập trung một chỗ để tra nhanh.")
 
-    h("12.1 Doanh thu tính trên giờ TÍNH TIỀN, chi phí tính trên giờ ĐÃ LÀM", 2)
+    h("11.1 Doanh thu tính trên giờ TÍNH TIỀN, chi phí tính trên giờ ĐÃ LÀM", 2)
     note(
         "Đây là bất đối xứng CỐ Ý, đừng “sửa” cho đều.\n\n"
         "Làm 8 giờ nhưng chỉ tính khách 6 giờ:\n"
@@ -131,20 +131,20 @@ def build(g):
         "warn",
     )
 
-    h("12.2 Chỉ giờ ĐÃ DUYỆT mới ra doanh thu", 2)
+    h("11.2 Chỉ giờ ĐÃ DUYỆT mới ra doanh thu", 2)
     p(
         "Khi tổ chức bật yêu cầu duyệt giờ, dòng chưa duyệt không tính vào doanh "
         "thu. Vẫn tính vào chi phí — cùng nguyên tắc thận trọng như chi phí."
     )
 
-    h("12.3 Giá vốn chốt tại thời điểm ghi giờ", 2)
+    h("11.3 Giá vốn chốt tại thời điểm ghi giờ", 2)
     p(
         "Mỗi dòng giờ lưu lại giá vốn tại đúng thời điểm ghi. Tăng lương sau đó "
         "không làm đổi chi phí của những giờ đã ghi trước — báo cáo tháng cũ không "
         "bị nhảy số."
     )
 
-    h("12.4 Bốn quy tắc còn lại", 2)
+    h("11.4 Bốn quy tắc còn lại", 2)
     table(
         ["Quy tắc", "Nội dung"],
         [
@@ -170,13 +170,13 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 13. DANH MỤC CASE ══════════════════
-    h("13. Danh mục case dữ liệu mẫu", 1)
+    h("12. Danh mục case dữ liệu mẫu", 1)
     p(
         "Bản demo đã cài sẵn dữ liệu phủ đủ các trường hợp dưới đây. Dùng bảng này "
         "khi kiểm thử để biết vào đâu xem được case nào."
     )
 
-    h("13.1 Hạng mục — cách tính tiền và đơn vị", 2)
+    h("12.1 Hạng mục — cách tính tiền và đơn vị", 2)
     table(
         ["Case", "Số lượng", "Xem ở đâu"],
         [
@@ -193,7 +193,7 @@ def build(g):
         widths=[6.0, 3.4, 6.8],
     )
 
-    h("13.2 Giá vốn — đủ 5 kỳ lương", 2)
+    h("12.2 Giá vốn — đủ 5 kỳ lương", 2)
     table(
         ["Kỳ lương", "Người", "Số tiền", "Ghi chú"],
         [
@@ -213,7 +213,7 @@ def build(g):
         small=True,
     )
 
-    h("13.3 Chi phí — đủ 4 trạng thái duyệt", 2)
+    h("12.3 Chi phí — đủ 4 trạng thái duyệt", 2)
     table(
         ["Trạng thái", "Phiếu ví dụ", "Đặc điểm"],
         [
@@ -229,7 +229,7 @@ def build(g):
         widths=[3.4, 5.4, 7.4],
     )
 
-    h("13.4 Chi phí — các biến thể khác", 2)
+    h("12.4 Chi phí — các biến thể khác", 2)
     table(
         ["Case", "Phiếu ví dụ", "Đặc điểm"],
         [
@@ -253,7 +253,7 @@ def build(g):
         small=True,
     )
 
-    h("13.5 Giờ và hợp đồng", 2)
+    h("12.5 Giờ và hợp đồng", 2)
     table(
         ["Case", "Số lượng", "Ý nghĩa khi kiểm thử"],
         [
@@ -277,7 +277,7 @@ def build(g):
         small=True,
     )
 
-    h("13.6 Loại dịch vụ và bảng giá", 2)
+    h("12.6 Loại dịch vụ và bảng giá", 2)
     table(
         ["Case", "Ví dụ", "Ý nghĩa"],
         [
@@ -300,10 +300,10 @@ def build(g):
     pagebreak()
 
     # ══════════════════ 14. VIỆC CÒN TỒN ══════════════════
-    h("14. Việc còn tồn và giới hạn", 1)
+    h("13. Việc còn tồn và giới hạn", 1)
     p("Phần này ghi minh bạch những gì CHƯA có, để team không kỳ vọng nhầm.")
 
-    h("14.1 Đã chốt KHÔNG làm", 2)
+    h("13.1 Đã chốt KHÔNG làm", 2)
     table(
         ["Tính năng", "Lý do bỏ"],
         [
@@ -322,7 +322,7 @@ def build(g):
         widths=[5.4, 10.8],
     )
 
-    h("14.2 Giới hạn kỹ thuật hiện tại", 2)
+    h("13.2 Giới hạn kỹ thuật hiện tại", 2)
     table(
         ["Giới hạn", "Ảnh hưởng", "Khi nào cần xử lý"],
         [
@@ -346,7 +346,7 @@ def build(g):
         small=True,
     )
 
-    h("14.3 Chạy bản demo trên máy cá nhân", 2)
+    h("13.3 Chạy bản demo trên máy cá nhân", 2)
     note(
         "npx vite dev --config vite.config.local.ts --port 5199\n\n"
         "Dùng file cấu hình riêng vì bản gốc nạp plugin của Lovable, plugin đó so "
