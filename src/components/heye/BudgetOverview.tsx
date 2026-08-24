@@ -478,7 +478,11 @@ function Chart({
           }}
         >
           <div className="mb-1 font-bold">{hp.label}</div>
-          <TipRow color="#F5C86B" label="Giờ dự kiến" value={`${Math.round(hp.scheduled / 60)}h`} />
+          <TipRow
+            color="#F5C86B"
+            label={hp.isFuture ? "Giờ xếp lịch tương lai" : "Giờ đã xếp lịch"}
+            value={`${Math.round(hp.scheduled / 60)}h`}
+          />
           <TipRow
             color="#E9A319"
             label={tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
@@ -518,6 +522,14 @@ function Chart({
       )}
 
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Biểu đồ diễn biến">
+        <defs>
+          {/* Sọc chéo cho giờ đã xếp ở kỳ tương lai */}
+          <pattern id="futureSch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="#F5C86B" opacity="0.22" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#F5C86B" strokeWidth="3" opacity="0.75" />
+          </pattern>
+        </defs>
+
         {/* Lưới ngang + hai trục */}
         {[0, 0.25, 0.5, 0.75, 1].map((r) => {
           const y = pad.t + ih - r * ih;
@@ -548,7 +560,11 @@ function Chart({
         })}
 
         {/* Cột nhạt (giờ đã xếp) rộng, cột đậm (giờ tính tiền) hẹp hơn
-            chồng lên cùng tâm — đúng cách Productive vẽ. */}
+            chồng lên cùng tâm — đúng cách Productive vẽ.
+
+            Giờ đã xếp của kỳ TƯƠNG LAI là một mục riêng trong chú thích
+            (Future scheduled time): cùng vị trí cùng bề rộng nhưng vẽ sọc,
+            vì đó là dự kiến chứ chưa phải việc đã diễn ra. */}
         {series.map((p, i) => {
           const cx = x(i);
           const base = pad.t + ih;
@@ -561,8 +577,8 @@ function Chart({
                 y={ySch}
                 width={wideW}
                 height={Math.max(0, base - ySch)}
-                fill="#F5C86B"
-                opacity="0.55"
+                fill={p.isFuture ? "url(#futureSch)" : "#F5C86B"}
+                opacity={p.isFuture ? 1 : 0.55}
               />
               <rect
                 x={cx - narrowW / 2}
@@ -730,11 +746,14 @@ function Chart({
       </svg>
 
       <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 border-t border-line pt-2.5 text-[11.5px] text-ink-2">
+        <Legend color="#E9A319" box>
+          {tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
+        </Legend>
         <Legend color="#F5C86B" box faded>
           Giờ đã xếp lịch
         </Legend>
-        <Legend color="#E9A319" box>
-          {tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
+        <Legend color="#F5C86B" box hatched>
+          Giờ xếp lịch tương lai
         </Legend>
         {tab === "budgeting" ? (
           <>
@@ -871,16 +890,30 @@ function Legend({
   dash,
   box,
   faded,
+  hatched,
 }: {
   children: React.ReactNode;
   color: string;
   dash?: boolean;
   box?: boolean;
   faded?: boolean;
+  /** Ô sọc chéo, dùng cho phần dự kiến chưa diễn ra. */
+  hatched?: boolean;
 }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      {box ? (
+      {hatched ? (
+        <span
+          className="h-2.5 w-3.5 rounded-sm"
+          style={{
+            background:
+              "repeating-linear-gradient(45deg, " +
+              color +
+              " 0 3px, transparent 3px 6px)",
+            opacity: 0.85,
+          }}
+        />
+      ) : box ? (
         <span
           className="h-2.5 w-3.5 rounded-sm"
           style={{ background: color, opacity: faded ? 0.55 : 1 }}

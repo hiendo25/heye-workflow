@@ -82,6 +82,7 @@ type ColKey = (typeof COLUMNS)[number]["key"];
 const BILL_STYLE: Record<BillingType, string> = {
   tm: "bg-good-soft text-good",
   fixed: "bg-warn-soft text-warn",
+  percentage: "bg-brand-soft text-brand",
   non_billable: "bg-line text-ink-3",
 };
 
@@ -165,6 +166,10 @@ export function BudgetDetail({
   const sections = data.sections.filter((s) => s.budget_id === budget.id);
   const loose = services.filter((s) => !s.section_id);
   const total = budgetTotal(services);
+  // Nền để tính hạng mục phần trăm: tổng những hạng mục đứng độc lập.
+  const pctBase = services
+    .filter((x) => x.billing_type !== "percentage" && x.billing_type !== "non_billable")
+    .reduce((a, x) => a + Number(x.quantity) * Number(x.price), 0);
   const totalQty = services.reduce((a, s) => a + Number(s.quantity), 0);
 
   /** Nhân bản hạng mục: chép mọi thiết lập, thêm tiền tố vào tên. */
@@ -422,6 +427,7 @@ export function BudgetDetail({
                   <SectionRows
                     onPatch={onEditService}
                     onDuplicate={dupService}
+                    pctBase={pctBase}
                     key={sec.id}
                     name={sec.name}
                     rows={rows}
@@ -448,6 +454,7 @@ export function BudgetDetail({
                 <SectionRows
                   onPatch={onEditService}
                   onDuplicate={dupService}
+                  pctBase={pctBase}
                   name={sections.length ? "Chưa phân nhóm" : "Hạng mục bán"}
                   rows={loose}
                   data={data}
@@ -580,6 +587,7 @@ function SectionRows({
   onDelete,
   onPatch,
   onDuplicate,
+  pctBase,
 }: {
   name: string;
   rows: BudgetService[];
@@ -598,6 +606,8 @@ function SectionRows({
   /** Sửa nhanh một trường ngay trên bảng, dùng cho hai icon Theo dõi. */
   onPatch: (id: string, v: Record<string, unknown>) => void;
   onDuplicate: (s: BudgetService) => void;
+  /** Tổng các hạng mục KHÔNG phải phần trăm, để tính phí theo tỷ lệ. */
+  pctBase: number;
 }) {
   const on = (k: ColKey) => cols.has(k);
   const sum = budgetTotal(rows);
@@ -691,7 +701,9 @@ function SectionRows({
               </td>
             )}
             {on("unit") && (
-              <td className="px-3 py-2 text-[12px] text-ink-2">{UNIT_LABEL[s.unit] ?? s.unit}</td>
+              <td className="px-3 py-2 text-[12px] text-ink-2">
+                {s.billing_type === "percentage" ? "phần trăm" : (UNIT_LABEL[s.unit] ?? s.unit)}
+              </td>
             )}
             {on("track") && (
               <td className="px-3 py-2">
@@ -732,16 +744,28 @@ function SectionRows({
             )}
             {on("quantity") && (
               <td className="num px-3 py-2 text-right">
-                {s.quantity} {UNIT_LABEL[s.unit]}
+                {/* Hạng mục phần trăm: số lượng CHÍNH LÀ tỷ lệ phần trăm */}
+                {s.billing_type === "percentage"
+                  ? `${s.quantity} %`
+                  : `${s.quantity} ${UNIT_LABEL[s.unit] ?? s.unit}`}
               </td>
             )}
-            {on("price") && <td className="num px-3 py-2 text-right">{money(s.price)}</td>}
+            {on("price") && (
+              <td className="num px-3 py-2 text-right">
+                {/* Phần trăm không có đơn giá riêng, nó ăn theo tổng bên dưới */}
+                {s.billing_type === "percentage" ? (
+                  <span className="text-ink-3">—</span>
+                ) : (
+                  money(s.price)
+                )}
+              </td>
+            )}
             {on("total") && (
               <td className="num px-3 py-2 text-right font-semibold">
                 {s.billing_type === "non_billable" ? (
                   <span className="text-ink-3">0</span>
                 ) : (
-                  money(serviceTotal(s))
+                  money(Math.round(serviceTotal(s, pctBase)))
                 )}
               </td>
             )}
@@ -924,7 +948,14 @@ function ServiceDialog({
           </L>
 
           <div className="grid grid-cols-2 gap-3">
-            <L label={`Số lượng bán (${item ? UNIT_LABEL[item.unit] : "đơn vị"})`} required>
+            <L
+              label={
+                billing === "percentage"
+                  ? "Tỷ lệ (%)"
+                  : `Số lượng bán (${item ? (UNIT_LABEL[item.unit] ?? item.unit) : "đơn vị"})`
+              }
+              required
+            >
               <Input
                 className="num"
                 inputMode="decimal"
@@ -1121,7 +1152,14 @@ function EditServiceDialog({
           <p className="-mt-1 text-[11.5px] text-ink-3">{BILLING_NOTE[billing]}</p>
 
           <div className="grid grid-cols-3 gap-3">
-            <L label={`Số lượng (${UNIT_LABEL[service.unit]})`} required>
+            <L
+              label={
+                billing === "percentage"
+                  ? "Tỷ lệ (%)"
+                  : `Số lượng (${UNIT_LABEL[service.unit] ?? service.unit})`
+              }
+              required
+            >
               <Input
                 className="num"
                 inputMode="decimal"

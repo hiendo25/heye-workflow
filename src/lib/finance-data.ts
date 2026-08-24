@@ -62,7 +62,7 @@ export type RateCardItem = {
   allow_expense: boolean;
 };
 
-export type BillingType = "tm" | "fixed" | "non_billable";
+export type BillingType = "tm" | "fixed" | "percentage" | "non_billable";
 
 export type Budget = {
   id: string;
@@ -231,6 +231,7 @@ export const UNIT_LABEL: Record<string, string> = {
 export const BILLING_LABEL: Record<BillingType, string> = {
   tm: "Theo giờ",
   fixed: "Trọn gói",
+  percentage: "Phần trăm",
   non_billable: "Không tính tiền",
 };
 
@@ -238,18 +239,42 @@ export const BILLING_LABEL: Record<BillingType, string> = {
 export const BILLING_NOTE: Record<BillingType, string> = {
   tm: "Làm bao nhiêu tính bấy nhiêu. Vượt dự kiến thì khách trả thêm.",
   fixed: "Giá cố định. Vượt dự kiến thì công ty tự chịu — nên vẫn phải theo dõi giờ.",
+  percentage:
+    "Tính theo phần trăm tổng các hạng mục khác: phí quản lý dự án, phí vận hành. Hợp đồng to thì phí to theo.",
   non_billable: "Không thu tiền khách nhưng vẫn tính chi phí: họp nội bộ, đào tạo, bảo hành.",
 };
 
-/** Thành tiền một hạng mục. Không tính tiền thì doanh thu bằng 0. */
-export function serviceTotal(s: Pick<BudgetService, "billing_type" | "quantity" | "price">): number {
+/**
+ * Thành tiền một hạng mục. Không tính tiền thì doanh thu bằng 0.
+ *
+ * Hạng mục PHẦN TRĂM không tự đứng một mình: nó ăn theo tổng các hạng mục
+ * khác, nên cần truyền base vào. Gọi mà không có base thì trả 0 — đúng hơn là
+ * đoán bừa một con số.
+ */
+export function serviceTotal(
+  s: Pick<BudgetService, "billing_type" | "quantity" | "price">,
+  base = 0,
+): number {
   if (s.billing_type === "non_billable") return 0;
+  if (s.billing_type === "percentage") return (base * Number(s.quantity)) / 100;
   return s.quantity * s.price;
 }
 
-/** Tổng giá trị hợp đồng. */
+/**
+ * Tổng giá trị hợp đồng, tính hai vòng.
+ *
+ * Vòng một cộng các hạng mục đứng độc lập. Vòng hai mới tính phần trăm, vì
+ * phí quản lý 10% là 10% của những hạng mục kia — tính chung một vòng thì
+ * hoặc bỏ sót, hoặc phí lại tính lên chính nó.
+ */
 export function budgetTotal(services: BudgetService[]): number {
-  return services.reduce((sum, s) => sum + serviceTotal(s), 0);
+  const base = services
+    .filter((s) => s.billing_type !== "percentage")
+    .reduce((sum, s) => sum + serviceTotal(s), 0);
+  const pct = services
+    .filter((s) => s.billing_type === "percentage")
+    .reduce((sum, s) => sum + serviceTotal(s, base), 0);
+  return base + pct;
 }
 
 /** 700000 -> "700.000" */
@@ -1018,6 +1043,8 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
   let cappedMin = 0;
   for (const s of services) {
     if (s.billing_type === "non_billable") continue;
+    // Phần trăm tính sau, vì nó ăn theo tổng các hạng mục còn lại
+    if (s.billing_type === "percentage") continue;
     if (s.billing_type === "fixed") {
       revenue += Number(s.quantity) * Number(s.price);
       continue;
@@ -1030,6 +1057,14 @@ export function budgetSummary(data: FinanceData, budgetId: string) {
     const mins = Math.min(raw, capMin);
     cappedMin += raw - mins;
     revenue += (mins / 60) * Number(s.price);
+  }
+
+  // Phí theo tỷ lệ: phí quản lý 10% là 10% của doanh thu ĐÃ GHI NHẬN, không
+  // phải 10% của giá trị hợp đồng — làm được bao nhiêu mới thu phí bấy nhiêu.
+  const pctBase = revenue;
+  for (const s of services) {
+    if (s.billing_type !== "percentage") continue;
+    revenue += (pctBase * Number(s.quantity)) / 100;
   }
 
   // --- Chi phí: lương theo giờ ĐÃ LÀM + chi phí phát sinh
