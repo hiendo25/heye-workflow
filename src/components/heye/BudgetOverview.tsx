@@ -85,11 +85,6 @@ export function BudgetOverview({
   const shownMargin = shownRevenue ? (shownProfit / shownRevenue) * 100 : 0;
   const badgeDate = picked ? fmtVn(picked.endDate) : todayVn;
 
-  // Chưa dựng module hoá đơn, nên coi phần đã xuất là 0 và toàn bộ doanh thu
-  // đã ghi nhận là phần CHỜ XUẤT. Khi có bảng hoá đơn thì thay bằng số thật.
-  const invoiced = 0;
-  const toInvoice = Math.max(0, shownRevenue - invoiced);
-  const invoicedPct = s.contractTotal ? (invoiced / s.contractTotal) * 100 : 0;
 
   const timePct = s.soldQty ? Math.min(100, (shownRecogMin / 60 / s.soldQty) * 100) : 0;
   const workedPct = s.estimateQty ? Math.min(100, (shownWorkedMin / 60 / s.estimateQty) * 100) : 0;
@@ -224,24 +219,23 @@ export function BudgetOverview({
               <Bar pct={100 - budgetPct} />
             </Box>
 
-            {/* Ô thứ ba LUÔN là Hóa đơn ở Productive, cả hai tab. Trước đây
-                tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
-                ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
-                là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" en="Invoicing" date={badgeDate} action="Tạo hóa đơn">
-              <Row label="Tổng hợp đồng" en="Budget total" value={money(Math.round(s.contractTotal))} />
+            {/* Ô thứ ba: Productive để INVOICING ở đây, nhưng bên mình chưa
+                dựng module hóa đơn nên số nào cũng là số giả. Thay bằng cấu
+                thành chi phí — số thật, và là thứ quyết định lãi lỗ. */}
+            <Box title="Chi phí" en="Cost" date={badgeDate}>
+              <Row label="Lương nhân sự" en="Labour cost" value={money(Math.round(s.laborCost))} />
               <Row
-                label={`Đã xuất (${Math.round(invoicedPct)}%)`}
-                en="Invoiced"
-                value={money(Math.round(invoiced))}
+                label="Chi phí phát sinh"
+                en="Expenses"
+                value={money(Math.round(s.expenseCost))}
               />
               <Row
-                label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
-                en="For invoicing"
-                value={money(Math.round(toInvoice))}
+                label="Giờ không ra tiền"
+                en="Unbillable time"
+                value={fmtDuration(s.unbillableMin)}
                 big
+                tone={s.unbillableMin > 0 ? "warn" : undefined}
               />
-              <Bar pct={invoicedPct} tone="brand" />
             </Box>
           </>
         ) : (
@@ -274,24 +268,23 @@ export function BudgetOverview({
               />
             </Box>
 
-            {/* Ô thứ ba LUÔN là Hóa đơn ở Productive, cả hai tab. Trước đây
-                tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
-                ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
-                là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" en="Invoicing" date={badgeDate} action="Tạo hóa đơn">
-              <Row label="Tổng hợp đồng" en="Budget total" value={money(Math.round(s.contractTotal))} />
+            {/* Ô thứ ba: Productive để INVOICING ở đây, nhưng bên mình chưa
+                dựng module hóa đơn nên số nào cũng là số giả. Thay bằng cấu
+                thành chi phí — số thật, và là thứ quyết định lãi lỗ. */}
+            <Box title="Chi phí" en="Cost" date={badgeDate}>
+              <Row label="Lương nhân sự" en="Labour cost" value={money(Math.round(s.laborCost))} />
               <Row
-                label={`Đã xuất (${Math.round(invoicedPct)}%)`}
-                en="Invoiced"
-                value={money(Math.round(invoiced))}
+                label="Chi phí phát sinh"
+                en="Expenses"
+                value={money(Math.round(s.expenseCost))}
               />
               <Row
-                label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
-                en="For invoicing"
-                value={money(Math.round(toInvoice))}
+                label="Giờ không ra tiền"
+                en="Unbillable time"
+                value={fmtDuration(s.unbillableMin)}
                 big
+                tone={s.unbillableMin > 0 ? "warn" : undefined}
               />
-              <Bar pct={invoicedPct} tone="brand" />
             </Box>
           </>
         )}

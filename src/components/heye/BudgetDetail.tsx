@@ -107,9 +107,10 @@ const TABS = [
   { key: "services", label: "Hạng mục", en: "Services" },
   { key: "time", label: "Giờ", en: "Time" },
   { key: "expenses", label: "Chi phí", en: "Expenses" },
-  { key: "invoices", label: "Hóa đơn", en: "Invoices" },
-  { key: "recurring", label: "Định kỳ", en: "Recurring" },
-  { key: "feed", label: "Hoạt động", en: "Feed" },
+  // Productive còn ba tab Invoices / Recurring / Feed, nhưng bên mình bán theo
+  // dự án chứ không có hợp đồng lặp theo tháng, và module hóa đơn chưa dựng.
+  // Dựng vỏ rỗng chỉ để giống hình thì người dùng bấm vào lại thấy màn trống,
+  // tệ hơn là không có tab. Thêm lại khi nào thật sự cần xuất hóa đơn.
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -489,78 +490,6 @@ export function BudgetDetail({
         </div>
       )}
 
-      {/* ---- Ba tab còn lại: dựng vỏ đúng bố cục, nội dung làm sau ---- */}
-      {(view === "invoices" || view === "recurring" || view === "feed") && (
-        <div className="mt-4 space-y-3">
-          <ListToolbar fieldCount={7} filterCount={1} />
-          <div className="rounded-xl border border-line bg-surface">
-            <EmptyState
-              hint={
-                view === "invoices"
-                  ? "Chưa có hóa đơn nào cho hợp đồng này."
-                  : view === "recurring"
-                    ? "Hợp đồng này không chạy theo chu kỳ."
-                    : "Chưa có hoạt động nào được ghi lại."
-              }
-              onReset={() => undefined}
-            />
-          </div>
-        </div>
-      )}
-
-      <ServiceDialog
-        key={adding ?? "closed"}
-        open={adding !== null}
-        data={data}
-        budget={budget}
-        sectionId={adding === "root" ? null : adding}
-        onClose={() => setAdding(null)}
-        onSubmit={onAddService}
-      />
-
-      <BlankServiceDialog
-        key={blankIn ?? "closed-blank"}
-        open={blankIn !== null}
-        data={data}
-        budget={budget}
-        sectionId={blankIn === "root" ? null : blankIn}
-        onClose={() => setBlankIn(null)}
-        onSubmit={onAddService}
-      />
-
-      <EditServiceDialog
-        key={editingId ?? "closed-edit"}
-        open={editingId !== null}
-        service={services.find((s) => s.id === editingId) ?? null}
-        sections={sections}
-        onClose={() => setEditingId(null)}
-        onSubmit={(v) => {
-          onEditService(editingId!, v);
-          setEditingId(null);
-        }}
-      />
-
-      <BudgetCostRatesDialog
-        key={costOpen ? "bcr" : "closed-bcr"}
-        open={costOpen}
-        budget={budget}
-        data={data}
-        users={users}
-        onClose={() => setCostOpen(false)}
-        onSave={onSaveBudgetCostRate}
-        onRemove={onRemoveBudgetCostRate}
-      />
-
-      <EditBudgetDialog
-        key={editBudget ? "edit-b" : "closed-b"}
-        open={editBudget}
-        budget={budget}
-        onClose={() => setEditBudget(false)}
-        onSubmit={(v) => {
-          onEditBudget(v);
-          setEditBudget(false);
-        }}
-      />
       </div>
 
       {sideOpen ? (

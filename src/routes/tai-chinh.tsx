@@ -805,8 +805,12 @@ function RatesPanel({
       (openCard === null || c.id === openCard),
   );
   const standard = data.rateCards.find((c) => c.client_id === null && !c.is_archived) ?? null;
+  // So giá phải CÙNG ĐƠN VỊ. Khoá chỉ theo loại dịch vụ thì dòng bán theo
+  // ngày bị đem so với giá chuẩn theo giờ, ra chênh lệch +627% vô nghĩa.
   const stdPrice = new Map(
-    data.rateCardItems.filter((i) => i.rate_card_id === standard?.id).map((i) => [i.service_type_id, i.price]),
+    data.rateCardItems
+      .filter((i) => i.rate_card_id === standard?.id)
+      .map((i) => [`${i.service_type_id}|${i.unit}`, i.price]),
   );
 
   return (
@@ -984,7 +988,7 @@ function RatesPanel({
               ) : (
                 items.map((it) => {
                   const st = data.serviceTypes.find((s) => s.id === it.service_type_id);
-                  const d = isStd ? null : priceDelta(it.price, stdPrice.get(it.service_type_id) ?? 0);
+                  const d = isStd ? null : priceDelta(it.price, stdPrice.get(`${it.service_type_id}|${it.unit}`) ?? 0);
                   return (
                     <PanelRow
                       key={it.id}
@@ -1035,7 +1039,9 @@ function RatesPanel({
                         style={{ background: st?.color }}
                       />
                       {it.name ?? st?.name ?? "—"}
-                      {it.name && st && (
+                      {/* Chỉ hiện tên loại khi nó KHÁC tên dòng — bằng nhau thì
+                          in hai lần cạnh nhau trông như lỗi. */}
+                      {it.name && st && it.name !== st.name && (
                         <span className="ml-2 text-[11.5px] text-ink-3">{st.name}</span>
                       )}
                       {it.billing_type && it.billing_type !== "tm" && (

@@ -798,7 +798,7 @@ function CalendarView({
       <div
         ref={gridRef}
         className="relative grid overflow-x-auto"
-        style={{ gridTemplateColumns: cols, height: gridH }}
+        style={{ gridTemplateColumns: cols, height: gridH + 10, paddingTop: 10 }}
       >
         <div className="relative border-r border-line">
           {hours.map((h) => (
@@ -815,12 +815,14 @@ function CalendarView({
         {days.map((d) => {
           const iso = isoDate(d);
           const weekend = d.getDay() === 0 || d.getDay() === 6;
+          const isToday = iso === isoDate(new Date());
+          const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
           const list = entries.filter((e) => e.date === iso && e.start_min != null);
           return (
             <div
               key={iso}
               className={
-                "relative border-r border-line last:border-r-0 " + (weekend ? "bg-bg/40" : "")
+                "relative border-r border-line last:border-r-0 " + (weekend ? "bg-line/25" : "")
               }
             >
               {hours.map((h) => (
@@ -830,6 +832,16 @@ function CalendarView({
                   style={{ top: (h - DAY_START) * PX_PER_MIN }}
                 />
               ))}
+
+              {/* Vạch đỏ đánh dấu bây giờ, chỉ vẽ ở cột hôm nay */}
+              {isToday && nowMin >= DAY_START && nowMin <= DAY_END && (
+                <div
+                  className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-bad"
+                  style={{ top: (nowMin - DAY_START) * PX_PER_MIN }}
+                >
+                  <span className="absolute -left-1 -top-[3px] h-1.5 w-1.5 rounded-full bg-bad" />
+                </div>
+              )}
 
               {list.map((e) => {
                 const isDragging = drag?.id === e.id;

@@ -557,7 +557,7 @@ function TableView({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full min-w-[1000px] border-collapse text-[13px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-ink-3">
                   {has("person") && (
