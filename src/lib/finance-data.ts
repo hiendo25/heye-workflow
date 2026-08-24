@@ -550,6 +550,8 @@ export type TimeEntry = {
   change_request_note: string | null;
   locked_at: string | null;
   timer_started_at: string | null;
+  /** Phút từ nửa đêm, null nếu dòng không gắn giờ cụ thể trong ngày. */
+  start_min: number | null;
 };
 
 /**

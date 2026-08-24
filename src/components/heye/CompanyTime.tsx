@@ -1,5 +1,16 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Download, Plus, Undo2, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +45,14 @@ import {
   type FinanceData,
   type TimeEntry,
 } from "@/lib/finance-data";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Ticket, User } from "@/lib/heye-data";
 
 /**
@@ -67,6 +86,9 @@ export function CompanyTime({
   onDelete: (id: string) => void;
 }) {
   const [cursor, setCursor] = useState(new Date());
+  // Hai chế độ như Productive: lưới tuần trả lời "ai thiếu giờ", bảng phẳng
+  // trả lời "dòng giờ nào thoả điều kiện này".
+  const [mode, setMode] = useState<"sheet" | "table">("sheet");
   const [cell, setCell] = useState<{ userId: string; date?: string } | null>(null);
   const [adding, setAdding] = useState<{ userId: string; date: string } | null>(null);
 
@@ -103,6 +125,23 @@ export function CompanyTime({
 
         <div className="flex-1" />
 
+        <div className="flex overflow-hidden rounded-lg border border-line">
+          <button
+            type="button"
+            onClick={() => setMode("sheet")}
+            className={`px-3 py-1.5 text-[12.5px] ${mode === "sheet" ? "bg-brand text-white" : "text-ink-2 hover:text-ink"}`}
+          >
+            Bảng chấm công
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("table")}
+            className={`px-3 py-1.5 text-[12.5px] ${mode === "table" ? "bg-brand text-white" : "text-ink-2 hover:text-ink"}`}
+          >
+            Bảng
+          </button>
+        </div>
+
         <div className="flex items-center gap-0.5">
           <IconBtn onClick={() => move(-7)} label="Tuần trước">
             <ChevronLeft size={15} />
@@ -129,8 +168,17 @@ export function CompanyTime({
         )}
       </div>
 
-      {/* Lưới tuần: hàng là người, cột là ngày */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
+      {mode === "table" ? (
+        <TableView
+          data={data}
+          users={users}
+          entries={inWeek}
+          onApprove={onApprove}
+          onUnapprove={onUnapprove}
+        />
+      ) : (
+        /* Lưới tuần: hàng là người, cột là ngày */
+        <div className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-[13px]">
             <thead>
@@ -242,10 +290,14 @@ export function CompanyTime({
           </table>
         </div>
       </div>
+      )}
 
-      <p className="mt-2 text-[11.5px] text-ink-3">
-        Ô vàng còn dòng chờ duyệt · ô xanh đã duyệt hết · bấm ô trống để ghi hộ giờ.
-      </p>
+      {mode === "sheet" && (
+        <p className="mt-2 text-[11.5px] text-ink-3">
+          Số đỏ là ngày thiếu giờ so với giờ công kỳ vọng · ô vàng còn dòng chờ duyệt · ô xanh đã
+          duyệt hết · bấm ô trống để ghi hộ giờ.
+        </p>
+      )}
 
       {cell && (
         <EntriesSheet
@@ -283,6 +335,387 @@ export function CompanyTime({
         />
       )}
     </>
+  );
+}
+
+/* ================= Chế độ Bảng =================
+   Productive cho Giờ toàn công ty chạy ở hai chế độ: Bảng chấm công (lưới
+   tuần, hàng là người) và Bảng (danh sách phẳng từng dòng giờ, gộp nhóm
+   được). Trước đây tôi chỉ dựng chế độ thứ nhất, mất nửa chức năng màn.
+
+   Chế độ Bảng trả lời câu hỏi khác hẳn: không phải "tuần này ai thiếu giờ"
+   mà "những dòng giờ nào thoả điều kiện này" — nên nó cần lọc, chọn cột và
+   gộp nhóm, còn lưới tuần thì không. */
+
+type GroupKey = "person" | "service" | "budget" | "none";
+type FieldKey = "person" | "date" | "budget" | "service" | "worked" | "billable" | "note" | "method";
+
+const FIELDS: { key: FieldKey; label: string }[] = [
+  { key: "person", label: "Nhân sự" },
+  { key: "date", label: "Ngày" },
+  { key: "budget", label: "Hợp đồng" },
+  { key: "service", label: "Hạng mục" },
+  { key: "worked", label: "Giờ làm" },
+  { key: "billable", label: "Giờ tính tiền" },
+  { key: "note", label: "Ghi chú" },
+  { key: "method", label: "Cách ghi" },
+];
+
+const GROUPS: { key: GroupKey; label: string }[] = [
+  { key: "person", label: "Theo nhân sự" },
+  { key: "budget", label: "Theo hợp đồng" },
+  { key: "service", label: "Theo hạng mục" },
+  { key: "none", label: "Không gộp" },
+];
+
+function TableView({
+  data,
+  users,
+  entries,
+  onApprove,
+  onUnapprove,
+}: {
+  data: FinanceData;
+  users: User[];
+  entries: TimeEntry[];
+  onApprove: (ids: string[]) => void;
+  onUnapprove: (id: string) => void;
+}) {
+  const [group, setGroup] = useState<GroupKey>("person");
+  const [fields, setFields] = useState<Set<FieldKey>>(
+    new Set<FieldKey>(["person", "date", "budget", "service", "worked", "billable", "note"]),
+  );
+  const [q, setQ] = useState("");
+  const [onlyPending, setOnlyPending] = useState(false);
+  const [userFilter, setUserFilter] = useState("all");
+
+  const has = (k: FieldKey) => fields.has(k);
+  const toggle = (k: FieldKey) =>
+    setFields((f) => {
+      const n = new Set(f);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+
+  const nameOf = (e: TimeEntry) => users.find((u) => u.id === e.user_id)?.full_name ?? "";
+  const svcOf = (e: TimeEntry) => data.services.find((x) => x.id === e.service_id);
+  const budOf = (e: TimeEntry) => {
+    const sv = svcOf(e);
+    return sv ? data.budgets.find((b) => b.id === sv.budget_id) : null;
+  };
+
+  const filterCount = (onlyPending ? 1 : 0) + (userFilter === "all" ? 0 : 1) + (q ? 1 : 0);
+
+  const rows = entries.filter((e) => {
+    if (onlyPending && e.approved_at) return false;
+    if (userFilter !== "all" && e.user_id !== userFilter) return false;
+    if (q) {
+      const hay = [nameOf(e), svcOf(e)?.name, budOf(e)?.name, e.note].join(" ").toLowerCase();
+      if (!hay.includes(q.toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  const keyOf = (e: TimeEntry) =>
+    group === "person"
+      ? nameOf(e)
+      : group === "budget"
+        ? (budOf(e)?.name ?? "Không rõ")
+        : group === "service"
+          ? (svcOf(e)?.name ?? "Không rõ")
+          : "";
+
+  const groups = new Map<string, TimeEntry[]>();
+  for (const e of rows) {
+    const k = keyOf(e);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(e);
+  }
+  const orderedKeys = [...groups.keys()].sort();
+
+  const colCount = [...fields].length + 1;
+  const grandWorked = rows.reduce((a, e) => a + e.minutes, 0);
+  const grandBill = rows.reduce((a, e) => a + (e.billable_minutes ?? 0), 0);
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-line bg-surface px-3 py-2.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-ink hover:bg-line/50"
+            >
+              <Table2 size={14} /> Cột
+              <span className="num rounded-full bg-line px-1.5 py-px text-[11px] text-ink-2">
+                {fields.size}
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[190px]">
+            {FIELDS.map((f) => (
+              <DropdownMenuCheckboxItem
+                key={f.key}
+                checked={has(f.key)}
+                onCheckedChange={() => toggle(f.key)}
+                onSelect={(ev) => ev.preventDefault()}
+              >
+                {f.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-ink hover:bg-line/50"
+            >
+              <SlidersHorizontal size={14} /> Bộ lọc
+              {filterCount > 0 && (
+                <span className="num rounded-full bg-brand px-1.5 py-px text-[11px] text-white">
+                  {filterCount}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[220px]">
+            <DropdownMenuCheckboxItem
+              checked={onlyPending}
+              onCheckedChange={() => setOnlyPending((v) => !v)}
+              onSelect={(ev) => ev.preventDefault()}
+            >
+              Chỉ dòng chờ duyệt
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setUserFilter("all")}>Mọi nhân sự</DropdownMenuItem>
+            {users.map((u) => (
+              <DropdownMenuItem key={u.id} onSelect={() => setUserFilter(u.id)}>
+                {userFilter === u.id ? "• " : ""}
+                {u.full_name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-ink hover:bg-line/50"
+            >
+              Nhóm
+              <span className="text-[12px] text-ink-3">
+                {GROUPS.find((g) => g.key === group)?.label}
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[170px]">
+            {GROUPS.map((g) => (
+              <DropdownMenuItem key={g.key} onSelect={() => setGroup(g.key)}>
+                {group === g.key ? "• " : ""}
+                {g.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div className="relative">
+            <Search
+              size={13}
+              className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-3"
+            />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tìm..."
+              className="h-8 w-[180px] pl-7 text-[12.5px]"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+        {rows.length === 0 ? (
+          <div className="px-5 py-16 text-center">
+            <p className="text-[15px] font-semibold">Không có dòng nào khớp</p>
+            <p className="mt-1 text-[13px] text-ink-2">Thử nới bộ lọc để xem thêm kết quả.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setOnlyPending(false);
+                setUserFilter("all");
+                setQ("");
+              }}
+              className="mt-3 rounded-lg border border-line px-4 py-2 text-[13px] font-semibold hover:border-brand hover:text-brand"
+            >
+              Đặt lại bộ lọc
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wider text-ink-3">
+                  {has("person") && (
+                    <th className="border-b border-line px-4 py-2 text-left font-bold">Nhân sự</th>
+                  )}
+                  {has("date") && (
+                    <th className="border-b border-line px-3 py-2 text-left font-bold">Ngày</th>
+                  )}
+                  {has("budget") && (
+                    <th className="border-b border-line px-3 py-2 text-left font-bold">Hợp đồng</th>
+                  )}
+                  {has("service") && (
+                    <th className="border-b border-line px-3 py-2 text-left font-bold">Hạng mục</th>
+                  )}
+                  {has("worked") && (
+                    <th className="border-b border-line px-3 py-2 text-right font-bold">Giờ làm</th>
+                  )}
+                  {has("billable") && (
+                    <th className="border-b border-line px-3 py-2 text-right font-bold">
+                      Giờ tính tiền
+                    </th>
+                  )}
+                  {has("method") && (
+                    <th className="border-b border-line px-3 py-2 text-center font-bold">
+                      Cách ghi
+                    </th>
+                  )}
+                  {has("note") && (
+                    <th className="border-b border-line px-3 py-2 text-left font-bold">Ghi chú</th>
+                  )}
+                  <th className="border-b border-line px-3 py-2 text-center font-bold">Duyệt</th>
+                </tr>
+              </thead>
+
+              {orderedKeys.map((k) => {
+                const list = groups.get(k)!;
+                const gw = list.reduce((a, e) => a + e.minutes, 0);
+                const gb = list.reduce((a, e) => a + (e.billable_minutes ?? 0), 0);
+                const gPending = list.filter((e) => !e.approved_at).map((e) => e.id);
+                return (
+                  <tbody key={k || "all"}>
+                    {group !== "none" && (
+                      <tr className="bg-bg/50">
+                        <td colSpan={colCount} className="px-4 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[12px] font-bold">{k}</span>
+                            <span className="num text-[11.5px] text-ink-3">
+                              {list.length} dòng · {fmtDuration(gw)}
+                            </span>
+                            <div className="flex-1" />
+                            {gPending.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => onApprove(gPending)}
+                                className="text-[11.5px] font-semibold text-brand hover:underline"
+                              >
+                                Duyệt {gPending.length} dòng
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {list.map((e) => {
+                      const u = users.find((x) => x.id === e.user_id);
+                      const sv = svcOf(e);
+                      const bg = budOf(e);
+                      return (
+                        <tr key={e.id} className="border-b border-line last:border-0">
+                          {has("person") && (
+                            <td className="px-4 py-2">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span
+                                  className="flex h-5 w-5 items-center justify-center rounded-full text-[9.5px] font-bold text-white"
+                                  style={{ backgroundColor: u?.avatar_color ?? "#8B87A0" }}
+                                >
+                                  {u?.initial ?? "?"}
+                                </span>
+                                {u?.full_name ?? "—"}
+                              </span>
+                            </td>
+                          )}
+                          {has("date") && (
+                            <td className="num px-3 py-2 text-ink-2">{e.date}</td>
+                          )}
+                          {has("budget") && (
+                            <td className="px-3 py-2 text-[12.5px] text-ink-2">
+                              {bg?.name ?? "—"}
+                            </td>
+                          )}
+                          {has("service") && (
+                            <td className="px-3 py-2 text-[12.5px]">{sv?.name ?? "—"}</td>
+                          )}
+                          {has("worked") && (
+                            <td className="num px-3 py-2 text-right font-semibold">
+                              {fmtDuration(e.minutes)}
+                            </td>
+                          )}
+                          {has("billable") && (
+                            <td className="num px-3 py-2 text-right text-ink-2">
+                              {fmtDuration(e.billable_minutes ?? 0)}
+                            </td>
+                          )}
+                          {has("method") && (
+                            <td className="px-3 py-2 text-center text-[11.5px] text-ink-3">
+                              {e.timer_started_at ? "bấm giờ" : "nhập tay"}
+                            </td>
+                          )}
+                          {has("note") && (
+                            <td className="px-3 py-2 text-[12px] text-ink-2">{e.note ?? ""}</td>
+                          )}
+                          <td className="px-3 py-2 text-center">
+                            {e.approved_at ? (
+                              <button
+                                type="button"
+                                onClick={() => onUnapprove(e.id)}
+                                className="rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-good hover:bg-good-soft"
+                                title="Bỏ duyệt"
+                              >
+                                đã duyệt
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onApprove([e.id])}
+                                className="rounded px-1.5 py-0.5 text-[10.5px] font-semibold text-warn hover:bg-warn-soft"
+                                title="Duyệt dòng này"
+                              >
+                                chờ duyệt
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                );
+              })}
+
+              <tfoot>
+                <tr className="border-t border-line bg-bg/50 font-semibold">
+                  <td className="px-4 py-2.5" colSpan={Math.max(1, colCount - 3)}>
+                    TỔNG · {rows.length} dòng
+                  </td>
+                  {has("worked") && (
+                    <td className="num px-3 py-2.5 text-right">{fmtDuration(grandWorked)}</td>
+                  )}
+                  {has("billable") && (
+                    <td className="num px-3 py-2.5 text-right">{fmtDuration(grandBill)}</td>
+                  )}
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

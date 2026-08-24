@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   CalendarDays,
@@ -223,7 +223,22 @@ export function MyTime({
           onAdd={(iso, serviceId) => setAdding({ date: iso, serviceId })}
         />
       ) : view === "calendar" ? (
-        <CalendarView data={data} entries={mine} days={days} />
+        <CalendarView
+          data={data}
+          entries={mine}
+          days={days}
+          onMove={(id, date, startMin) => onUpdate(id, { date, start_min: startMin })}
+          onResize={(id, minutes) => {
+            // Kéo dài block thì giờ tính tiền đi theo, trừ khi hạng mục
+            // không tính tiền — lúc đó giữ nguyên 0.
+            const e = mine.find((x) => x.id === id);
+            const sv = e ? data.services.find((x) => x.id === e.service_id) : null;
+            onUpdate(id, {
+              minutes,
+              billable_minutes: sv?.billing_type === "non_billable" ? 0 : minutes,
+            });
+          }}
+        />
       ) : (
         <DayView
           data={data}
@@ -647,55 +662,272 @@ function WeekGrid({
   );
 }
 
-/* ================= Lịch ================= */
+/* ================= Lịch: lưới giờ kéo thả =================
+   Productive dựng chế độ Lịch thành LƯỚI GIỜ, không phải 7 thẻ danh sách:
+   trục dọc là các mốc giờ trong ngày, 7 cột ngày, mỗi dòng giờ là một block
+   đặt đúng vị trí bắt đầu và cao theo thời lượng. Kéo thân block để đổi
+   giờ hoặc ngày, kéo cạnh dưới để đổi thời lượng.
+
+   Những dòng chưa gắn giờ cụ thể xếp vào khu riêng phía trên lưới, đúng như
+   bản gốc: chúng vẫn tính vào tổng nhưng không có chỗ đứng trên trục giờ. */
+
+const DAY_START = 7 * 60;
+const DAY_END = 20 * 60;
+const PX_PER_MIN = 0.9;
+const SNAP = 15;
 
 function CalendarView({
   data,
   entries,
   days,
+  onMove,
+  onResize,
 }: {
   data: FinanceData;
   entries: TimeEntry[];
   days: Date[];
+  onMove: (id: string, date: string, startMin: number) => void;
+  onResize: (id: string, minutes: number) => void;
 }) {
+  const [drag, setDrag] = useState<{
+    id: string;
+    mode: "move" | "resize";
+    startY: number;
+    startX: number;
+    origMin: number;
+    origStart: number;
+    origDate: string;
+  } | null>(null);
+  const [ghost, setGhost] = useState<{ date: string; start: number; minutes: number } | null>(null);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const isoDays = days.map(isoDate);
+  const hours: number[] = [];
+  for (let h = DAY_START; h <= DAY_END; h += 60) hours.push(h);
+
+  const snap = (v: number) => Math.round(v / SNAP) * SNAP;
+
+  const compute = (ev: PointerEvent) => {
+    if (!drag) return null;
+    const dyMin = (ev.clientY - drag.startY) / PX_PER_MIN;
+    if (drag.mode === "resize") {
+      return {
+        date: drag.origDate,
+        start: drag.origStart,
+        minutes: Math.max(SNAP, snap(drag.origMin + dyMin)),
+      };
+    }
+    const colW = (gridRef.current?.clientWidth ?? 700) / days.length;
+    const shift = Math.round((ev.clientX - drag.startX) / colW);
+    const idx = isoDays.indexOf(drag.origDate);
+    const nextIdx = Math.max(0, Math.min(days.length - 1, idx + shift));
+    const rawStart = snap(drag.origStart + dyMin);
+    return {
+      date: isoDays[nextIdx] ?? drag.origDate,
+      start: Math.max(DAY_START, Math.min(DAY_END - drag.origMin, rawStart)),
+      minutes: drag.origMin,
+    };
+  };
+
+  useEffect(() => {
+    if (!drag) return;
+    const onMoveEv = (ev: PointerEvent) => setGhost(compute(ev));
+    const onUp = (ev: PointerEvent) => {
+      const next = compute(ev);
+      if (next) {
+        if (drag.mode === "resize") {
+          if (next.minutes !== drag.origMin) onResize(drag.id, next.minutes);
+        } else if (next.date !== drag.origDate || next.start !== drag.origStart) {
+          onMove(drag.id, next.date, next.start);
+        }
+      }
+      setDrag(null);
+      setGhost(null);
+    };
+    window.addEventListener("pointermove", onMoveEv);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMoveEv);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [drag]);
+
+  const untimed = entries.filter((e) => e.start_min == null);
+  const gridH = (DAY_END - DAY_START) * PX_PER_MIN;
+  const cols = "56px repeat(" + days.length + ", 1fr)";
+
   return (
-    <div className="mt-4 grid gap-2 md:grid-cols-7">
-      {days.map((d) => {
-        const iso = isoDate(d);
-        const list = entries.filter((e) => e.date === iso);
-        const total = list.reduce((a, e) => a + e.minutes, 0);
-        return (
-          <div key={iso} className="min-h-[150px] rounded-xl border border-line bg-surface p-2">
-            <div className="mb-1.5 flex items-baseline justify-between">
-              <span className="text-[11.5px] font-semibold text-ink-2">
+    <div className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
+      {untimed.length > 0 && (
+        <div className="border-b border-line bg-bg/40 px-3 py-2">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+            Chưa gắn giờ
+          </div>
+          <div className="grid gap-1" style={{ gridTemplateColumns: cols }}>
+            <div />
+            {isoDays.map((iso) => (
+              <div key={iso} className="space-y-1">
+                {untimed
+                  .filter((e) => e.date === iso)
+                  .map((e) => (
+                    <UntimedChip key={e.id} entry={e} data={data} />
+                  ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid border-b border-line" style={{ gridTemplateColumns: cols }}>
+        <div />
+        {days.map((d) => {
+          const iso = isoDate(d);
+          const total = entries.filter((e) => e.date === iso).reduce((a, e) => a + e.minutes, 0);
+          const weekend = d.getDay() === 0 || d.getDay() === 6;
+          return (
+            <div key={iso} className={"px-2 py-2 text-center " + (weekend ? "bg-bg/60" : "")}>
+              <div className="text-[11.5px] font-bold text-ink-2">
                 {WEEKDAY_LABEL[d.getDay()]} {d.getDate()}
-              </span>
-              {total > 0 && (
-                <span className="num text-[11px] text-ink-3">{fmtDuration(total)}</span>
-              )}
+              </div>
+              {total > 0 && <div className="num text-[11px] text-ink-3">{fmtDuration(total)}</div>}
             </div>
-            <div className="space-y-1">
+          );
+        })}
+      </div>
+
+      <div
+        ref={gridRef}
+        className="relative grid overflow-x-auto"
+        style={{ gridTemplateColumns: cols, height: gridH }}
+      >
+        <div className="relative border-r border-line">
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="num absolute right-1.5 -translate-y-1/2 text-[10.5px] text-ink-3"
+              style={{ top: (h - DAY_START) * PX_PER_MIN }}
+            >
+              {String(Math.floor(h / 60)).padStart(2, "0")}:00
+            </div>
+          ))}
+        </div>
+
+        {days.map((d) => {
+          const iso = isoDate(d);
+          const weekend = d.getDay() === 0 || d.getDay() === 6;
+          const list = entries.filter((e) => e.date === iso && e.start_min != null);
+          return (
+            <div
+              key={iso}
+              className={
+                "relative border-r border-line last:border-r-0 " + (weekend ? "bg-bg/40" : "")
+              }
+            >
+              {hours.map((h) => (
+                <div
+                  key={h}
+                  className="absolute inset-x-0 border-t border-line/60"
+                  style={{ top: (h - DAY_START) * PX_PER_MIN }}
+                />
+              ))}
+
               {list.map((e) => {
-                const s = data.services.find((x) => x.id === e.service_id);
-                const t = s ? data.serviceTypes.find((x) => x.id === s.service_type_id) : null;
+                const isDragging = drag?.id === e.id;
+                if (isDragging && ghost && ghost.date !== iso) return null;
+                const g = isDragging && ghost ? ghost : null;
+                const st = g?.start ?? e.start_min ?? DAY_START;
+                const mins = g?.minutes ?? e.minutes;
+                const sv = data.services.find((x) => x.id === e.service_id);
+                const t = sv ? data.serviceTypes.find((x) => x.id === sv.service_type_id) : null;
+                const color = t?.color ?? "#8B87A0";
+                const locked = !!e.approved_at;
                 return (
                   <div
                     key={e.id}
-                    className="rounded-md px-1.5 py-1 text-[11px] leading-tight"
-                    style={{ background: `${t?.color ?? "#8B87A0"}1a` }}
-                    title={s?.name}
+                    onPointerDown={(ev) => {
+                      if (locked) return;
+                      ev.preventDefault();
+                      setDrag({
+                        id: e.id,
+                        mode: "move",
+                        startY: ev.clientY,
+                        startX: ev.clientX,
+                        origMin: e.minutes,
+                        origStart: e.start_min ?? DAY_START,
+                        origDate: e.date,
+                      });
+                    }}
+                    className={
+                      "absolute inset-x-1 overflow-hidden rounded-md px-1.5 py-1 text-[11px] leading-tight " +
+                      (locked ? "cursor-not-allowed " : "cursor-grab active:cursor-grabbing ") +
+                      (isDragging ? "opacity-80 shadow-lg" : "")
+                    }
+                    style={{
+                      top: (st - DAY_START) * PX_PER_MIN,
+                      height: Math.max(18, mins * PX_PER_MIN - 2),
+                      background: color + "22",
+                      borderLeft: "3px solid " + color,
+                    }}
+                    title={
+                      (sv?.name ?? "") +
+                      " · " +
+                      fmtDuration(mins) +
+                      (locked ? " · đã duyệt, không sửa được" : "")
+                    }
                   >
-                    <div className="num font-semibold" style={{ color: t?.color }}>
-                      {fmtDuration(e.minutes)}
+                    <div className="num font-semibold" style={{ color }}>
+                      {fmtDuration(mins)}
                     </div>
-                    <div className="truncate text-ink-2">{s?.name}</div>
+                    <div className="truncate text-ink-2">{sv?.name}</div>
+
+                    {!locked && (
+                      <div
+                        onPointerDown={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          setDrag({
+                            id: e.id,
+                            mode: "resize",
+                            startY: ev.clientY,
+                            startX: ev.clientX,
+                            origMin: e.minutes,
+                            origStart: e.start_min ?? DAY_START,
+                            origDate: e.date,
+                          });
+                        }}
+                        className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize hover:bg-ink/10"
+                      />
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      <p className="border-t border-line px-3 py-2 text-[11px] text-ink-3">
+        Kéo block để đổi giờ hoặc ngày · kéo cạnh dưới để đổi thời lượng · bám mốc 15 phút
+      </p>
+    </div>
+  );
+}
+
+/** Chip cho dòng chưa gắn giờ cụ thể trong ngày. */
+function UntimedChip({ entry, data }: { entry: TimeEntry; data: FinanceData }) {
+  const sv = data.services.find((x) => x.id === entry.service_id);
+  const t = sv ? data.serviceTypes.find((x) => x.id === sv.service_type_id) : null;
+  const color = t?.color ?? "#8B87A0";
+  return (
+    <div
+      className="truncate rounded-md px-1.5 py-1 text-[11px]"
+      style={{ background: color + "22", borderLeft: "3px solid " + color }}
+      title={sv?.name}
+    >
+      <span className="num font-semibold" style={{ color }}>
+        {fmtDuration(entry.minutes)}
+      </span>{" "}
+      <span className="text-ink-2">{sv?.name}</span>
     </div>
   );
 }
