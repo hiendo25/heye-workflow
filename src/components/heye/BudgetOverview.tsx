@@ -19,7 +19,12 @@ import {
 } from "@/lib/finance-data";
 
 type Tab = "budgeting" | "profitability";
-type Grain = "month" | "week";
+/**
+ * Độ chi tiết trục thời gian. Productive có Year / Quarter / Month / Week
+ * (và hai mục theo năm tài chính, bỏ qua vì bên mình trùng năm dương lịch).
+ * Hợp đồng dài vài năm mà chỉ xem theo tháng thì biểu đồ dày đặc, khó đọc.
+ */
+type Grain = "year" | "quarter" | "month" | "week";
 
 /**
  * Tổng quan hợp đồng — hai góc nhìn của cùng một dữ liệu.
@@ -103,6 +108,12 @@ export function BudgetOverview({
         </div>
 
         <div className="flex overflow-hidden rounded-lg border border-line">
+          <Seg on={grain === "year"} onClick={() => setGrain("year")}>
+            Năm
+          </Seg>
+          <Seg on={grain === "quarter"} onClick={() => setGrain("quarter")}>
+            Quý
+          </Seg>
           <Seg on={grain === "month"} onClick={() => setGrain("month")}>
             Tháng
           </Seg>
@@ -354,6 +365,11 @@ function buildSeries(
   const today = isoDate(new Date());
 
   const keyOf = (d: string) => {
+    if (grain === "year") return d.slice(0, 4);
+    if (grain === "quarter") {
+      const m = Number(d.slice(5, 7));
+      return `${d.slice(0, 4)}-Q${Math.ceil(m / 3)}`;
+    }
     if (grain === "month") return d.slice(0, 7);
     const dt = new Date(d);
     const back = dt.getDay() === 0 ? 6 : dt.getDay() - 1;
@@ -433,7 +449,7 @@ function buildSeries(
       ct = b.cost;
     }
     return {
-      label: grain === "month" ? fmtMonth(k) : fmtWeek(k),
+      label: fmtKey(k, grain),
       key: k,
       endDate: periodEnd(k, grain),
       worked: w,
@@ -442,7 +458,7 @@ function buildSeries(
       revenue: rv,
       cost: ct,
       profit: rv - ct,
-      isFuture: k > (grain === "month" ? today.slice(0, 7) : today),
+      isFuture: k > keyOf(today),
     };
   });
 }
@@ -514,10 +530,6 @@ function Chart({
   const yH = (v: number) => pad.t + ih - (v / maxHours) * ih;
 
   const pickedIdx = pickedKey ? series.findIndex((p) => p.key === pickedKey) : -1;
-  // Nhãn vạch đổi theo độ chi tiết, giống Productive ghi Current month vs
-  // Current week chứ không dùng một chữ chung.
-  const grainLabel = series[0]?.key.includes("-W") || (series[0]?.key.length ?? 0) > 7 ? "Tuần" : "Tháng";
-
   const firstFuture = series.findIndex((p) => p.isFuture);
   const cutX = firstFuture > 0 ? x(firstFuture - 1) : -1;
   const [hover, setHover] = useState<number | null>(null);
@@ -1123,6 +1135,11 @@ const fmtVn = (v: string) => {
  * không phải tính đến hôm nay.
  */
 const periodEnd = (k: string, grain: Grain): string => {
+  if (grain === "year") return `${k}-12-31`;
+  if (grain === "quarter") {
+    const [y, q] = k.split("-Q").map(Number);
+    return isoDate(new Date(y!, q! * 3, 0));
+  }
   if (grain === "month") {
     const [y, m] = k.split("-").map(Number);
     // Ngày 0 của tháng kế tiếp chính là ngày cuối tháng này
@@ -1131,6 +1148,13 @@ const periodEnd = (k: string, grain: Grain): string => {
   const d = new Date(k);
   d.setDate(d.getDate() + 6);
   return isoDate(d);
+};
+
+/** Nhãn hiển thị của một kỳ, tuỳ độ chi tiết. */
+const fmtKey = (k: string, grain: Grain): string => {
+  if (grain === "year") return k;
+  if (grain === "quarter") return k.replace("-", " ");
+  return grain === "month" ? fmtMonth(k) : fmtWeek(k);
 };
 
 const fmtMonth = (k: string) => {

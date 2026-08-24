@@ -51,6 +51,9 @@ export function EditEntryDialog({
   const [date, setDate] = useState(entry?.date ?? "");
   const [dur, setDur] = useState(entry ? fmtDuration(entry.minutes) : "");
   const [note, setNote] = useState(entry?.note ?? "");
+  const [range, setRange] = useState(false);
+  const [from, setFrom] = useState("09:00");
+  const [to, setTo] = useState("17:00");
 
   useEffect(() => {
     if (!entry) return;
@@ -61,7 +64,17 @@ export function EditEntryDialog({
   }, [entry]);
 
   const options = data.services.filter((s) => s.allow_time);
-  const minutes = parseDuration(dur);
+  // Nhập khoảng giờ thì quy ra phút; qua nửa đêm coi như hôm sau.
+  const rangeMin = (() => {
+    if (!range) return null;
+    const [fh, fm] = from.split(":").map(Number);
+    const [th, tm] = to.split(":").map(Number);
+    if ([fh, fm, th, tm].some((n) => Number.isNaN(n))) return null;
+    let d = th! * 60 + tm! - (fh! * 60 + fm!);
+    if (d < 0) d += 24 * 60;
+    return d || null;
+  })();
+  const minutes = range ? rangeMin : parseDuration(dur);
   const svc = data.services.find((s) => s.id === serviceId);
   const free = svc?.billing_type === "non_billable";
 
@@ -107,13 +120,45 @@ export function EditEntryDialog({
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div>
-              <div className="mb-1 text-[12.5px] font-medium text-ink-2">Thời lượng</div>
-              <Input
-                className="num"
-                value={dur}
-                placeholder="2h30 hoặc 9-5"
-                onChange={(e) => setDur(e.target.value)}
-              />
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-[12.5px] font-medium text-ink-2">
+                  {range ? "Khoảng giờ" : "Thời lượng"}
+                </span>
+                {/* Productive có nút "Set range" chuyển giữa hai cách nhập.
+                    Gõ chuỗi 9-5 vào ô thời lượng vẫn được, nhưng người mới
+                    không đoán ra là gõ được. */}
+                <button
+                  type="button"
+                  onClick={() => setRange((v) => !v)}
+                  className="text-[11.5px] font-medium text-brand hover:underline"
+                >
+                  {range ? "Nhập thời lượng" : "Nhập khoảng giờ"}
+                </button>
+              </div>
+              {range ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="time"
+                    className="num h-9 px-2"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                  />
+                  <span className="text-ink-3">–</span>
+                  <Input
+                    type="time"
+                    className="num h-9 px-2"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <Input
+                  className="num"
+                  value={dur}
+                  placeholder="2h30 hoặc 9-5"
+                  onChange={(e) => setDur(e.target.value)}
+                />
+              )}
             </div>
           </div>
 
@@ -138,10 +183,14 @@ export function EditEntryDialog({
             disabled={!serviceId || !date || !minutes}
             onClick={() => {
               if (!entry || !minutes || !svc) return;
+              // Nhập khoảng giờ thì lưu luôn giờ bắt đầu, để block đứng đúng
+              // chỗ trên lưới lịch thay vì rơi về mặc định 7:00.
+              const [fh, fm] = from.split(":").map(Number);
               onSave({
                 service_id: serviceId,
                 date,
                 minutes,
+                ...(range && !Number.isNaN(fh) ? { start_min: fh! * 60 + fm! } : {}),
                 billable_minutes: free ? 0 : minutes,
                 note: note.trim() || null,
                 cost_rate_snapshot: Math.round(

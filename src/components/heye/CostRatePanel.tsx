@@ -38,6 +38,9 @@ import {
   type FinanceData,
   type OverheadSettings,
   type RateType,
+  capacityBetween,
+  VN_HOLIDAYS,
+  isoDate,
 } from "@/lib/finance-data";
 import type { User } from "@/lib/heye-data";
 
@@ -52,6 +55,124 @@ const DAYS = [
 ] as const;
 
 type DayKey = (typeof DAYS)[number]["key"];
+
+/**
+ * Biểu đồ giá vốn mỗi giờ theo thời gian.
+ *
+ * Productive vẽ vùng này ở nửa trái khối "Current cost rate". Ý nghĩa: giá vốn
+ * một người không cố định — tăng lương, đổi kỳ lương, đổi lịch làm việc đều
+ * làm nó nhảy bậc. Nhìn bảng lịch sử thì thấy từng mốc rời rạc; nhìn biểu đồ
+ * mới thấy xu hướng, và thấy ngay quãng nào giá vốn vọt lên.
+ *
+ * Vẽ dạng bậc thang chứ không nội suy, vì giá vốn đổi ĐỘT NGỘT tại ngày hiệu
+ * lực chứ không tăng dần — nối đường xiên là vẽ sai bản chất.
+ */
+function CostChart({ rows }: { rows: CostRate[] }) {
+  const today = isoDate(new Date());
+  const pts = [...rows]
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .map((r) => ({ date: r.start_date, v: hourlyCost(r, r.start_date) }))
+    .filter((p) => p.v > 0);
+
+  if (pts.length < 2) return null;
+
+  const W = 640;
+  const H = 130;
+  const pad = { t: 12, r: 12, b: 20, l: 62 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+
+  const t0 = new Date(pts[0]!.date).getTime();
+  const t1 = new Date(today).getTime();
+  const span = Math.max(1, t1 - t0);
+  const maxV = Math.max(...pts.map((p) => p.v)) * 1.15;
+
+  const x = (d: string) => pad.l + ((new Date(d).getTime() - t0) / span) * iw;
+  const y = (v: number) => pad.t + ih - (v / maxV) * ih;
+
+  // Đường bậc thang: giữ nguyên mức cho tới mốc kế tiếp rồi nhảy dọc
+  let d = `M${x(pts[0]!.date)} ${y(pts[0]!.v)}`;
+  for (let i = 1; i < pts.length; i++) {
+    d += ` L${x(pts[i]!.date)} ${y(pts[i - 1]!.v)} L${x(pts[i]!.date)} ${y(pts[i]!.v)}`;
+  }
+  d += ` L${x(today)} ${y(pts[pts.length - 1]!.v)}`;
+  const area = `${d} L${x(today)} ${pad.t + ih} L${pad.l} ${pad.t + ih} Z`;
+
+  return (
+    <div className="mt-3 rounded-xl border border-line bg-surface px-3 pb-1 pt-3">
+      <div className="mb-1 text-[11.5px] font-semibold text-ink-2">
+        Giá vốn mỗi giờ theo thời gian
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Biểu đồ giá vốn">
+        {[0, 0.5, 1].map((r) => {
+          const yy = pad.t + ih - r * ih;
+          return (
+            <g key={r}>
+              <line x1={pad.l} y1={yy} x2={W - pad.r} y2={yy} stroke="var(--line)" strokeWidth="1" />
+              <text
+                x={pad.l - 6}
+                y={yy + 3.5}
+                textAnchor="end"
+                fontSize="9"
+                fill="var(--ink-3)"
+                fontFamily="var(--font-mono)"
+              >
+                {shortVnd(maxV * r)}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={area} fill="var(--brand)" opacity="0.1" />
+        <path d={d} fill="none" stroke="var(--brand)" strokeWidth="2" />
+
+        {pts.map((p, i) => (
+          <circle key={i} cx={x(p.date)} cy={y(p.v)} r="3" fill="var(--brand)" />
+        ))}
+
+        <text x={pad.l} y={H - 6} fontSize="9" fill="var(--ink-3)" fontFamily="var(--font-mono)">
+          {pts[0]!.date}
+        </text>
+        <text
+          x={W - pad.r}
+          y={H - 6}
+          textAnchor="end"
+          fontSize="9"
+          fill="var(--ink-3)"
+          fontFamily="var(--font-mono)"
+        >
+          {today}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+/** 331633 -> "332k", 1250000 -> "1,3tr" */
+function shortVnd(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".", ",")}tr`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
+  return String(Math.round(n));
+}
+
+/** Số ngày đã áp mức giá vốn hiện tại — Productive hiện ngay trong ô tóm tắt. */
+function daysOnRate(r: CostRate, on: string): number {
+  const from = new Date(r.start_date);
+  const to = new Date(on);
+  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 86_400_000));
+}
+
+/**
+ * Số giờ làm việc của THÁNG hiện tại, khác "số giờ trọn kỳ" vốn tính theo kỳ
+ * lương. Người ăn lương tháng thì hai số này trùng nhau, nhưng người ăn lương
+ * năm hoặc hai tuần một lần thì lệch hẳn.
+ */
+function monthCapacity(r: CostRate, on: string): number {
+  const d = new Date(on);
+  const from = new Date(d.getFullYear(), d.getMonth(), 1);
+  const to = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return capacityBetween(r, from, to, VN_HOLIDAYS);
+}
 
 export function CostRatePanel({
   data,
@@ -303,6 +424,22 @@ function UserRatesSheet({
                   value={money(cur.amount)}
                 />
                 <Stat
+                  icon={<Calendar size={15} />}
+                  label="Đang áp mức này"
+                  value={`${daysOnRate(cur, today)} ngày`}
+                  sub={cur.end_date ? "có ngày kết thúc" : "chưa đặt ngày kết thúc"}
+                />
+                <Stat
+                  icon={<Timer size={15} />}
+                  label="Công suất tháng này"
+                  value={
+                    cur.rate_type === "hourly"
+                      ? "—"
+                      : `${Math.round(monthCapacity(cur, today))} giờ`
+                  }
+                  sub="đã trừ cuối tuần và ngày lễ"
+                />
+                <Stat
                   icon={<Timer size={15} />}
                   label="Số giờ trọn kỳ"
                   value={
@@ -335,6 +472,8 @@ function UserRatesSheet({
                 </div>
               </div>
             )}
+
+            {rows.length > 1 && <CostChart rows={rows} />}
 
             {rows.length > 0 && (
               <>
