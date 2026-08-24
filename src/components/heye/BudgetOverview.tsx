@@ -36,14 +36,24 @@ export function BudgetOverview({
 }) {
   const [tab, setTab] = useState<Tab>("budgeting");
   const [grain, setGrain] = useState<Grain>("month");
+  // Productive cho đổi giữa cộng dồn (nhìn xu hướng) và theo từng kỳ (nhìn
+  // lát cắt). Tôi trước đây chốt cứng cộng dồn nên mất nửa cách đọc biểu đồ.
+  const [cumulative, setCumulative] = useState(true);
+
   const [showChart, setShowChart] = useState(true);
 
   const view = tab;
   const todayVn = fmtVn(isoDate(new Date()));
   const s = useMemo(() => budgetSummary(data, budgetId), [data, budgetId]);
+
+  // Chưa dựng module hoá đơn, nên coi phần đã xuất là 0 và toàn bộ doanh thu
+  // đã ghi nhận là phần CHỜ XUẤT. Khi có bảng hoá đơn thì thay bằng số thật.
+  const invoiced = 0;
+  const toInvoice = Math.max(0, s.revenue - invoiced);
+  const invoicedPct = s.contractTotal ? (invoiced / s.contractTotal) * 100 : 0;
   const series = useMemo(
-    () => buildSeries(data, tickets, budgetId, grain),
-    [data, tickets, budgetId, grain],
+    () => buildSeries(data, tickets, budgetId, grain, cumulative),
+    [data, tickets, budgetId, grain, cumulative],
   );
 
   // Ngày ngân sách cạn theo lịch đã xếp — giá trị lớn nhất của dự báo.
@@ -77,6 +87,15 @@ export function BudgetOverview({
           </Seg>
         </div>
 
+        <div className="flex overflow-hidden rounded-lg border border-line">
+          <Seg on={cumulative} onClick={() => setCumulative(true)}>
+            Cộng dồn
+          </Seg>
+          <Seg on={!cumulative} onClick={() => setCumulative(false)}>
+            Theo kỳ
+          </Seg>
+        </div>
+
         <span className="num rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[12.5px] text-ink-2">
           {series.at(-1)?.label ?? "—"}
         </span>
@@ -103,7 +122,15 @@ export function BudgetOverview({
         </div>
       )}
 
-      {showChart && <Chart tab={view} series={series} contractTotal={s.contractTotal} />}
+      {showChart && (
+        <Chart
+          tab={view}
+          series={series}
+          /* Trần hợp đồng chỉ có nghĩa khi cộng dồn: xem theo từng kỳ thì
+             so một tháng lẻ với tổng hợp đồng là vô nghĩa. */
+          contractTotal={cumulative ? s.contractTotal : 0}
+        />
+      )}
 
       {/* Ba ô số liệu — bố cục theo Productive */}
       <div className="grid gap-0 overflow-hidden rounded-xl border border-line bg-surface md:grid-cols-3">
@@ -132,14 +159,22 @@ export function BudgetOverview({
               <Bar pct={100 - budgetPct} />
             </Box>
 
-            <Box title="Chi phí phát sinh">
-              <Row label="Số phiếu" value={`${s.expenses.length}`} />
-              <Row label="Đã chi" value={money(Math.round(s.expenseCost))} />
+            {/* Ô thứ ba LUÔN là Hóa đơn ở Productive, cả hai tab. Trước đây
+                tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
+                ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
+                là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
+            <Box title="Hóa đơn" date={todayVn} action="Tạo hóa đơn">
+              <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
               <Row
-                label="Chi phí lương"
-                value={money(Math.round(s.laborCost))}
+                label={`Đã xuất (${Math.round(invoicedPct)}%)`}
+                value={money(Math.round(invoiced))}
+              />
+              <Row
+                label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
+                value={money(Math.round(toInvoice))}
                 big
               />
+              <Bar pct={invoicedPct} tone="brand" />
             </Box>
           </>
         ) : (
@@ -167,15 +202,22 @@ export function BudgetOverview({
               <Bar pct={Math.max(0, Math.min(100, s.margin))} tone={s.profit >= 0 ? "good" : "bad"} />
             </Box>
 
-            <Box title="Cấu thành chi phí">
-              <Row label="Lương nhân sự" value={money(Math.round(s.laborCost))} />
-              <Row label="Chi phí phát sinh" value={money(Math.round(s.expenseCost))} />
+            {/* Ô thứ ba LUÔN là Hóa đơn ở Productive, cả hai tab. Trước đây
+                tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
+                ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
+                là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
+            <Box title="Hóa đơn" date={todayVn} action="Tạo hóa đơn">
+              <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
               <Row
-                label="Giờ không ra tiền"
-                value={fmtDuration(s.unbillableMin)}
-                big
-                tone={s.unbillableMin > 0 ? "warn" : undefined}
+                label={`Đã xuất (${Math.round(invoicedPct)}%)`}
+                value={money(Math.round(invoiced))}
               />
+              <Row
+                label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
+                value={money(Math.round(toInvoice))}
+                big
+              />
+              <Bar pct={invoicedPct} tone="brand" />
             </Box>
           </>
         )}
@@ -213,12 +255,21 @@ type Point = {
   isFuture: boolean;
 };
 
-/** Cộng dồn theo kỳ — giống chế độ Cumulative của Productive. */
+/**
+ * Dựng chuỗi điểm cho biểu đồ.
+ *
+ * cumulative = true  : cộng dồn, nhìn được xu hướng và chỗ chạm trần hợp đồng
+ * cumulative = false : từng kỳ đứng riêng, nhìn được tháng nào nặng tháng nào nhẹ
+ *
+ * Productive có cả hai và cho đổi bằng một dropdown; chốt cứng một kiểu là
+ * mất nửa cách đọc.
+ */
 function buildSeries(
   data: FinanceData,
   tickets: ForecastTicket[],
   budgetId: string,
   grain: Grain,
+  cumulative: boolean,
 ): Point[] {
   const s = budgetSummary(data, budgetId);
   const svc = new Map(s.services.map((x) => [x.id, x]));
@@ -290,11 +341,19 @@ function buildSeries(
   let w = 0, bi = 0, sc = 0, rv = 0, ct = 0;
   return keys.map((k) => {
     const b = buckets.get(k)!;
-    w += b.worked;
-    bi += b.billable;
-    sc += b.scheduled;
-    rv += b.rev;
-    ct += b.cost;
+    if (cumulative) {
+      w += b.worked;
+      bi += b.billable;
+      sc += b.scheduled;
+      rv += b.rev;
+      ct += b.cost;
+    } else {
+      w = b.worked;
+      bi = b.billable;
+      sc = b.scheduled;
+      rv = b.rev;
+      ct = b.cost;
+    }
     return {
       label: grain === "month" ? fmtMonth(k) : fmtWeek(k),
       worked: w,
@@ -711,10 +770,13 @@ function Chart({
 function Box({
   title,
   date,
+  action,
   children,
 }: {
   title: string;
   date?: string;
+  /** Link hành động ở góc phải header, kiểu "New invoice" của Productive. */
+  action?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -723,11 +785,18 @@ function Box({
         <span className="text-[10.5px] font-bold uppercase tracking-wider text-ink-3">
           {title}
         </span>
-        {date && (
-          <span className="num rounded bg-brand-soft px-1.5 py-0.5 text-[10.5px] text-brand">
-            {date}
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          {action && (
+            <button type="button" className="text-[11px] font-semibold text-brand hover:underline">
+              {action}
+            </button>
+          )}
+          {date && (
+            <span className="num rounded bg-brand-soft px-1.5 py-0.5 text-[10.5px] text-brand">
+              {date}
+            </span>
+          )}
+        </span>
       </div>
       {children}
     </div>
@@ -755,10 +824,18 @@ function Row({
   );
 }
 
-function Bar({ pct, tone }: { pct: number; tone?: "good" | "bad" }) {
+function Bar({ pct, tone }: { pct: number; tone?: "good" | "bad" | "brand" }) {
   const v = Math.max(0, Math.min(100, pct));
   const c =
-    tone === "bad" || v < 15 ? "bg-bad" : tone === "good" ? "bg-good" : v < 35 ? "bg-warn" : "bg-good";
+    tone === "brand"
+      ? "bg-brand"
+      : tone === "bad" || v < 15
+        ? "bg-bad"
+        : tone === "good"
+          ? "bg-good"
+          : v < 35
+            ? "bg-warn"
+            : "bg-good";
   return (
     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
       <div className={`h-full rounded-full ${c}`} style={{ width: `${v}%` }} />
