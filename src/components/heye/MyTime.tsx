@@ -156,7 +156,7 @@ export function MyTime({
             Ngày
           </Seg>
           <Seg on={view === "week"} onClick={() => setView("week")} icon={<Table2 size={13} />}>
-            Lưới tuần
+            Bảng chấm công
           </Seg>
           <Seg
             on={view === "calendar"}
@@ -516,14 +516,14 @@ function WeekGrid({
   days: Date[];
   onAdd: (iso: string, serviceId: string) => void;
 }) {
-  // Mỗi hàng là một hạng mục đã từng log trong tuần này.
+  // Hàng = hạng mục đã log trong tuần, CỘNG những hạng mục người dùng tự thêm.
+  // Thiếu vế thứ hai thì tuần trống là màn cụt: không có hàng nào để bấm vào.
   const isoDays = days.map(isoDate);
   const inWeek = entries.filter((e) => isoDays.includes(e.date));
-  const serviceIds = [...new Set(inWeek.map((e) => e.service_id))];
+  const [extra, setExtra] = useState<string[]>([]);
+  const serviceIds = [...new Set([...inWeek.map((e) => e.service_id), ...extra])];
 
-  if (serviceIds.length === 0) {
-    return <Empty>Tuần này chưa ghi nhận giờ nào. Chuyển sang xem Ngày để bắt đầu.</Empty>;
-  }
+  const canAdd = data.services.filter((s) => s.allow_time && !serviceIds.includes(s.id));
 
   const cell = (sid: string, iso: string) =>
     inWeek.filter((e) => e.service_id === sid && e.date === iso).reduce((a, e) => a + e.minutes, 0);
@@ -535,12 +535,38 @@ function WeekGrid({
           <thead>
             <tr className="text-[11px] uppercase tracking-wider text-ink-3">
               <th className="border-b border-line px-4 py-2 text-left font-bold">Hạng mục</th>
+              {/* Cột Tổng đứng NGAY SAU tên hạng mục, trước các ngày — đúng
+                  thứ tự Productive. Đặt ở cuối thì phải kéo ngang mới thấy. */}
+              <th className="border-b border-r border-line px-3 py-2 text-right font-bold">
+                Tổng
+              </th>
               {days.map((d) => (
                 <th key={isoDate(d)} className="border-b border-line px-2 py-2 text-center font-bold">
                   {WEEKDAY_LABEL[d.getDay()]} {d.getDate()}
                 </th>
               ))}
-              <th className="border-b border-line px-3 py-2 text-right font-bold">Tổng</th>
+            </tr>
+            {/* Hàng tổng theo từng ngày, Productive gọi là Weekly summary */}
+            <tr className="bg-bg/40 text-[12px]">
+              <td className="border-b border-line px-4 py-1.5 font-semibold text-ink-2">
+                Tổng theo ngày
+              </td>
+              <td className="num border-b border-r border-line px-3 py-1.5 text-right font-bold">
+                {fmtDuration(
+                  serviceIds.reduce(
+                    (a, sid) => a + isoDays.reduce((b, iso) => b + cell(sid, iso), 0),
+                    0,
+                  ),
+                )}
+              </td>
+              {isoDays.map((iso) => (
+                <td
+                  key={iso}
+                  className="num border-b border-line px-2 py-1.5 text-center font-semibold text-ink-2"
+                >
+                  {fmtDuration(serviceIds.reduce((a, sid) => a + cell(sid, iso), 0))}
+                </td>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -563,6 +589,9 @@ function WeekGrid({
                       </div>
                     </div>
                   </td>
+                  <td className="num border-r border-line px-3 py-2 text-right font-semibold">
+                    {fmtDuration(rowTotal)}
+                  </td>
                   {isoDays.map((iso) => {
                     const m = cell(sid, iso);
                     return (
@@ -581,15 +610,39 @@ function WeekGrid({
                       </td>
                     );
                   })}
-                  <td className="num px-3 py-2 text-right font-semibold">
-                    {fmtDuration(rowTotal)}
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Thêm hạng mục vào bảng, đúng vị trí góc dưới trái như Productive */}
+      {canAdd.length > 0 && (
+        <div className="border-t border-line px-3 py-2">
+          <Select value="" onValueChange={(v) => setExtra((x) => [...x, v])}>
+            <SelectTrigger className="h-8 w-[260px] border-dashed text-[12.5px]">
+              <SelectValue placeholder="+ Thêm hạng mục" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[280px]">
+              {data.budgets.map((b) => {
+                const items = canAdd.filter((s) => s.budget_id === b.id);
+                if (!items.length) return null;
+                return (
+                  <SelectGroup key={b.id}>
+                    <SelectLabel className="text-[11px] text-ink-3">{b.name}</SelectLabel>
+                    {items.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 }

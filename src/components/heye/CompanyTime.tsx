@@ -136,12 +136,22 @@ export function CompanyTime({
             <thead>
               <tr className="text-[11px] uppercase tracking-wider text-ink-3">
                 <th className="border-b border-line px-4 py-2 text-left font-bold">Nhân sự</th>
+                {/* Tổng tuần đứng ngay sau tên người, trước các ngày — thứ tự
+                    Productive. Ở cuối bảng thì phải kéo ngang mới đọc được. */}
+                <th className="border-b border-r border-line px-3 py-2 text-right font-bold">
+                  Tổng
+                </th>
                 {days.map((d) => {
                   const total = inWeek
                     .filter((e) => e.date === isoDate(d))
                     .reduce((a, e) => a + e.minutes, 0);
                   return (
-                    <th key={isoDate(d)} className="border-b border-line px-2 py-2 text-center">
+                    <th
+                      key={isoDate(d)}
+                      className={`border-b border-line px-2 py-2 text-center ${
+                        d.getDay() === 0 || d.getDay() === 6 ? "bg-bg/60" : ""
+                      }`}
+                    >
                       <div className="font-bold">
                         {WEEKDAY_LABEL[d.getDay()]} {d.getDate()}
                       </div>
@@ -153,7 +163,6 @@ export function CompanyTime({
                     </th>
                   );
                 })}
-                <th className="border-b border-line px-3 py-2 text-right font-bold">Tổng</th>
                 <th className="border-b border-line px-3 py-2 text-center font-bold">Nộp</th>
               </tr>
             </thead>
@@ -178,11 +187,20 @@ export function CompanyTime({
                         <span className="font-medium">{u.full_name}</span>
                       </button>
                     </td>
+                    <td className="num border-r border-line px-3 py-2 text-right font-semibold">
+                      {total ? fmtDuration(total) : <span className="text-ink-3">—</span>}
+                    </td>
                     {isoDays.map((iso) => {
                       const m = minutesOf(u.id, iso);
                       const hasPending = inWeek.some(
                         (e) => e.user_id === u.id && e.date === iso && !e.approved_at,
                       );
+                      // Productive tô ĐỎ ngày thiếu giờ so với giờ công kỳ vọng,
+                      // đây mới là thứ quản lý cần thấy khi quét bảng. Màu theo
+                      // trạng thái duyệt là trục khác, giữ lại cho ngày đủ giờ.
+                      const dow = new Date(iso).getDay();
+                      const expected = dow === 0 || dow === 6 ? 0 : 8 * 60;
+                      const short = expected > 0 && m < expected;
                       return (
                         <td key={iso} className="px-1 py-1 text-center">
                           <button
@@ -191,22 +209,29 @@ export function CompanyTime({
                               m ? setCell({ userId: u.id, date: iso }) : setAdding({ userId: u.id, date: iso })
                             }
                             className={`num w-full rounded-md py-1.5 text-[12.5px] ${
-                              m
-                                ? hasPending
-                                  ? "bg-warn-soft font-semibold text-warn"
-                                  : "bg-good-soft font-semibold text-good"
-                                : "text-ink-3 hover:bg-surface-2"
+                              short
+                                ? "font-semibold text-bad"
+                                : m
+                                  ? hasPending
+                                    ? "bg-warn-soft font-semibold text-warn"
+                                    : "bg-good-soft font-semibold text-good"
+                                  : "text-ink-3 hover:bg-surface-2"
                             }`}
-                            title={m ? (hasPending ? "Còn dòng chờ duyệt" : "Đã duyệt hết") : "Ghi hộ giờ"}
+                            title={
+                              short
+                                ? `Thiếu giờ — kỳ vọng ${fmtDuration(expected)}`
+                                : m
+                                  ? hasPending
+                                    ? "Còn dòng chờ duyệt"
+                                    : "Đã duyệt hết"
+                                  : "Ghi hộ giờ"
+                            }
                           >
                             {m ? fmtDuration(m) : "+"}
                           </button>
                         </td>
                       );
                     })}
-                    <td className="num px-3 py-2 text-right font-semibold">
-                      {total ? fmtDuration(total) : <span className="text-ink-3">—</span>}
-                    </td>
                     <td className="px-3 py-2 text-center">
                       <SubBadge status={sub.status} days={sub.daysLogged} />
                     </td>
