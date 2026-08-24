@@ -61,6 +61,48 @@ type Draft = {
  * Chi phí — nguồn thứ hai sinh ra cost, bên cạnh giờ nhân sự.
  * Thầu phụ, bản quyền, thiết bị, đi lại.
  */
+/**
+ * Trạng thái THANH TOÁN — trục riêng, tách khỏi trạng thái DUYỆT.
+ *
+ * Một phiếu có thể đã duyệt mà chưa trả tiền, hoặc đã trả mà chưa duyệt.
+ * Trước đây tôi gộp làm một nên mất hẳn thông tin "đã chi tiền ra chưa".
+ *
+ * Tài liệu Productive: khi phiếu là hoàn ứng cho nhân viên thì nhãn đổi từ
+ * "Chưa trả / Đã trả" thành "Chưa hoàn / Đã hoàn" — cùng một cột, cách gọi
+ * khác vì người nhận tiền khác nhau.
+ */
+function PaymentPill({
+  expense,
+  onUpdate,
+}: {
+  expense: Expense;
+  onUpdate: (id: string, v: Record<string, unknown>) => void;
+}) {
+  const reimb = expense.is_reimbursed;
+  const paid = expense.is_paid;
+  const label = paid ? (reimb ? "Đã hoàn" : "Đã trả") : reimb ? "Chưa hoàn" : "Chưa trả";
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onUpdate(expense.id, {
+          is_paid: !paid,
+          paid_at: !paid ? new Date().toISOString().slice(0, 10) : null,
+        })
+      }
+      title={paid ? "Bấm để đánh dấu chưa trả" : "Bấm để đánh dấu đã trả"}
+      className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+        paid ? "bg-good-soft text-good" : "bg-warn-soft text-warn"
+      }`}
+    >
+      {label}
+      {paid && expense.paid_at && (
+        <span className="num ml-1 font-normal opacity-70">{fmtDay(expense.paid_at)}</span>
+      )}
+    </button>
+  );
+}
+
 export function Expenses({
   data,
   users,
@@ -179,12 +221,14 @@ export function Expenses({
             <table className="w-full min-w-[880px] border-collapse text-[13px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-ink-3">
-                  <Th className="text-left">Nội dung</Th>
                   <Th className="text-left">Hạng mục</Th>
-                  <Th className="text-left">Người nộp</Th>
+                  <Th className="text-left">Nội dung</Th>
+                  <Th className="text-left">Ngày</Th>
+                  <Th className="text-left">Thanh toán</Th>
+                  <Th className="text-center">Tệp</Th>
                   <Th className="text-right">Chi ra</Th>
                   <Th className="text-right">Tính khách</Th>
-                  <Th className="text-center">Trạng thái</Th>
+                  <Th className="text-center">Duyệt</Th>
                   <Th className="w-24" />
                 </tr>
               </thead>
@@ -203,28 +247,38 @@ export function Expenses({
                       className="cursor-pointer border-b border-line last:border-0 hover:bg-brand-soft/25"
                     >
                       <td className="px-3 py-2">
-                        <div className="font-medium text-ink">{e.reference}</div>
-                        <div className="text-[11.5px] text-ink-3">
-                          {fmtDay(e.date)}
-                          {e.vendor && ` · ${e.vendor}`}
-                          {rows.length > 1 && ` · ${rows.length} dòng`}
-                          {e.attachment_name && " · có tệp"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="truncate text-[12.5px]">{s?.name ?? "—"}</div>
+                        <div className="truncate text-[12.5px] font-medium">{s?.name ?? "—"}</div>
                         <div className="truncate text-[11px] text-ink-3">{b?.name}</div>
                       </td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1.5">
+                        <div className="font-medium text-ink">{e.reference}</div>
+                        <div className="text-[11.5px] text-ink-3">
                           <span
-                            className="flex h-5 w-5 items-center justify-center rounded-full text-[9.5px] font-bold text-white"
+                            className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full align-[-3px] text-[8.5px] font-bold text-white"
                             style={{ backgroundColor: who?.avatar_color ?? "#8B87A0" }}
                           >
                             {who?.initial ?? "?"}
                           </span>
-                          <span className="text-[12.5px]">{who?.full_name ?? "—"}</span>
-                        </span>
+                          {who?.full_name ?? "—"}
+                          {e.vendor && ` · ${e.vendor}`}
+                          {rows.length > 1 && ` · ${rows.length} dòng`}
+                        </div>
+                      </td>
+                      <td className="num px-3 py-2 text-[12.5px] text-ink-2">
+                        {fmtDay(e.date)}
+                        {e.due_date && (
+                          <div className="text-[11px] text-ink-3">hạn {fmtDay(e.due_date)}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
+                        <PaymentPill expense={e} onUpdate={onUpdate} />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {e.attachment_name ? (
+                          <Paperclip size={13} className="mx-auto text-ink-2" />
+                        ) : (
+                          <span className="text-[11px] text-ink-3">—</span>
+                        )}
                       </td>
                       <td className="num px-3 py-2 text-right font-semibold">
                         {money(Math.round(t.net))}
@@ -545,6 +599,10 @@ function ExpenseDialog({
   const [reference, setReference] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [vendor, setVendor] = useState("");
+  // Hoàn ứng: tiền do nhân viên ứng trước, công ty trả lại. Quyết định nhãn
+  // cột thanh toán ở bảng ngoài — "Chưa hoàn" thay vì "Chưa trả".
+  const [reimbursable, setReimbursable] = useState(false);
+  const [dueDate, setDueDate] = useState("");
   const [markupType, setMarkupType] = useState<"percent" | "fixed">("percent");
   const [markup, setMarkup] = useState("0");
   const [attachment, setAttachment] = useState("");
@@ -614,6 +672,23 @@ function ExpenseDialog({
               </L>
               <L label="Nhà cung cấp">
                 <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
+              </L>
+              <L label="Hoàn ứng">
+                <Select
+                  value={reimbursable ? "yes" : "no"}
+                  onValueChange={(v) => setReimbursable(v === "yes")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no">Không — công ty trả thẳng</SelectItem>
+                    <SelectItem value="yes">Có — nhân viên ứng trước</SelectItem>
+                  </SelectContent>
+                </Select>
+              </L>
+              <L label="Hạn thanh toán">
+                <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </L>
               <L label="Tệp đính kèm">
                 <Input
@@ -842,6 +917,8 @@ function ExpenseDialog({
                   reference: reference.trim(),
                   date,
                   vendor: vendor.trim() || null,
+                  is_reimbursed: reimbursable,
+                  due_date: dueDate || null,
                   attachment_name: attachment.trim() || null,
                   markup_type: markupType,
                   markup_value: Number(markup || 0),

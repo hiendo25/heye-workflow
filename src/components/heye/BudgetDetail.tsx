@@ -17,10 +17,12 @@ import {
   Share2,
   FileText,
   CalendarDays,
+  PanelLeftClose,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BudgetOverview } from "@/components/heye/BudgetOverview";
 import { EmptyState, ListToolbar, StatusPills } from "@/components/heye/BudgetChrome";
+import { BudgetSidebar } from "@/components/heye/BudgetSidebar";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -150,6 +152,7 @@ export function BudgetDetail({
   const [draft, setDraft] = useState("");
   const [newSection, setNewSection] = useState(false);
   const [view, setView] = useState<TabKey>("overview");
+  const [sideOpen, setSideOpen] = useState(true);
   const [cols, setCols] = useState<Set<ColKey>>(
     new Set(["desc", "track", "estimate", "quantity", "price", "total"]),
   );
@@ -177,7 +180,8 @@ export function BudgetDetail({
   };
 
   return (
-    <>
+    <div className="flex min-h-0 items-stretch gap-0">
+      <div className="min-w-0 flex-1">
       <button
         type="button"
         onClick={onBack}
@@ -510,7 +514,26 @@ export function BudgetDetail({
           setEditBudget(false);
         }}
       />
-    </>
+      </div>
+
+      {sideOpen ? (
+        <BudgetSidebar
+          budget={budget}
+          client={client ?? null}
+          contractTotal={total}
+          onClose={() => setSideOpen(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setSideOpen(true)}
+          title="Mở bảng thông tin"
+          className="ml-1 h-fit rounded-lg border border-line bg-surface p-2 text-ink-2 hover:border-brand hover:text-brand"
+        >
+          <PanelLeftClose size={17} />
+        </button>
+      )}
+    </div>
   );
 }
 
