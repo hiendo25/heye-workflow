@@ -11,5 +11,5 @@ export default defineMcp({
   version: "0.1.0",
   instructions:
     "Read-only tools for the HeyE work tracker (Vietnamese project management). Use `list_projects` and `list_groups` to explore the project tree, `list_tickets` to browse work items with filters, `get_ticket` for one item by key (e.g. AIE-183), and `list_people` for members and tags.",
-  tools: [listProjects, listGroups, listTickets, getTicket, listPeople] as Parameters<typeof defineMcp>[0]["tools"],
+  tools: [listProjects, listGroups, listTickets, getTicket, listPeople] as unknown as Parameters<typeof defineMcp>[0]["tools"],
 });
