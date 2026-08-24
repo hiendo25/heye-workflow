@@ -199,22 +199,24 @@ export function BudgetOverview({
       <div className="grid gap-0 overflow-hidden rounded-xl border border-line bg-surface md:grid-cols-3">
         {view === "budgeting" ? (
           <>
-            <Box title="Thời gian" date={badgeDate}>
-              <Row label="Giờ đã bán" value={`${s.soldQty}`} />
-              <Row label="Giờ tính tiền" value={fmtDuration(shownRecogMin)} />
+            <Box title="Thời gian" en="Time" date={badgeDate}>
+              <Row label="Giờ đã bán" en="Budgeted time" value={`${s.soldQty}`} />
+              <Row label="Giờ tính tiền" en="Billable time" value={fmtDuration(shownRecogMin)} />
               <Row
                 label={`Còn lại (${Math.round(100 - timePct)}%)`}
+                en="Remaining time"
                 value={`${Math.max(0, s.soldQty - shownRecogMin / 60).toFixed(1)}`}
                 big
               />
               <Bar pct={100 - timePct} />
             </Box>
 
-            <Box title="Ngân sách" date={badgeDate}>
-              <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
-              <Row label="Đã dùng" value={money(Math.round(shownUsed))} />
+            <Box title="Ngân sách" en="Budget" date={badgeDate}>
+              <Row label="Tổng hợp đồng" en="Budget total" value={money(Math.round(s.contractTotal))} />
+              <Row label="Đã dùng" en="Budget used" value={money(Math.round(shownUsed))} />
               <Row
                 label={`Còn lại (${Math.round(100 - budgetPct)}%)`}
+                en="Budget remaining"
                 value={money(Math.round(shownRemaining))}
                 big
                 tone={shownRemaining < 0 ? "bad" : undefined}
@@ -226,14 +228,16 @@ export function BudgetOverview({
                 tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
                 ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
                 là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" date={badgeDate} action="Tạo hóa đơn">
-              <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
+            <Box title="Hóa đơn" en="Invoicing" date={badgeDate} action="Tạo hóa đơn">
+              <Row label="Tổng hợp đồng" en="Budget total" value={money(Math.round(s.contractTotal))} />
               <Row
                 label={`Đã xuất (${Math.round(invoicedPct)}%)`}
+                en="Invoiced"
                 value={money(Math.round(invoiced))}
               />
               <Row
                 label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
+                en="For invoicing"
                 value={money(Math.round(toInvoice))}
                 big
               />
@@ -242,22 +246,24 @@ export function BudgetOverview({
           </>
         ) : (
           <>
-            <Box title="Thời gian" date={badgeDate}>
-              <Row label="Giờ ước tính" value={`${s.estimateQty}`} />
-              <Row label="Giờ đã làm" value={fmtDuration(shownWorkedMin)} />
+            <Box title="Thời gian" en="Time" date={badgeDate}>
+              <Row label="Giờ ước tính" en="Estimated time" value={`${s.estimateQty}`} />
+              <Row label="Giờ đã làm" en="Worked time" value={fmtDuration(shownWorkedMin)} />
               <Row
                 label={`Còn lại (${Math.round(100 - workedPct)}%)`}
+                en="Remaining time"
                 value={`${Math.max(0, s.estimateQty - shownWorkedMin / 60).toFixed(1)}`}
                 big
               />
               <Bar pct={100 - workedPct} />
             </Box>
 
-            <Box title="Lợi nhuận" date={badgeDate}>
-              <Row label="Doanh thu" value={money(Math.round(shownRevenue))} />
-              <Row label="Chi phí" value={money(Math.round(shownCost))} />
+            <Box title="Lợi nhuận" en="Profit" date={badgeDate}>
+              <Row label="Doanh thu" en="Revenue" value={money(Math.round(shownRevenue))} />
+              <Row label="Chi phí" en="Cost" value={money(Math.round(shownCost))} />
               <Row
                 label={`Lợi nhuận (${Math.round(shownMargin)}%)`}
+                en="Profit"
                 value={money(Math.round(shownProfit))}
                 big
                 tone={shownProfit >= 0 ? "good" : "bad"}
@@ -272,14 +278,16 @@ export function BudgetOverview({
                 tôi để chi phí ở đây — sai ở toàn bộ ảnh đối chiếu. Doanh thu đã
                 ghi nhận nhưng chưa xuất hoá đơn là tiền chưa đòi được, đó mới
                 là thứ đáng đặt cạnh ngân sách và lợi nhuận. */}
-            <Box title="Hóa đơn" date={badgeDate} action="Tạo hóa đơn">
-              <Row label="Tổng hợp đồng" value={money(Math.round(s.contractTotal))} />
+            <Box title="Hóa đơn" en="Invoicing" date={badgeDate} action="Tạo hóa đơn">
+              <Row label="Tổng hợp đồng" en="Budget total" value={money(Math.round(s.contractTotal))} />
               <Row
                 label={`Đã xuất (${Math.round(invoicedPct)}%)`}
+                en="Invoiced"
                 value={money(Math.round(invoiced))}
               />
               <Row
                 label={`Chờ xuất (${Math.round(100 - invoicedPct)}%)`}
+                en="For invoicing"
                 value={money(Math.round(toInvoice))}
                 big
               />
@@ -882,26 +890,26 @@ function Chart({
 
       <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 border-t border-line pt-2.5 text-[11.5px] text-ink-2">
         <Legend color="#E9A319" box>
-          {tab === "budgeting" ? "Giờ tính tiền" : "Giờ đã làm"}
+          {tab === "budgeting" ? "Giờ tính tiền · Billable time" : "Giờ đã làm · Worked time"}
         </Legend>
         <Legend color="#F5C86B" box faded>
-          Giờ đã xếp lịch
+          Giờ đã xếp lịch · Total scheduled time
         </Legend>
         {tab === "budgeting" ? (
           <>
-            <Legend color="var(--bad)">Tổng ngân sách</Legend>
-            <Legend color="var(--good)">Đã dùng</Legend>
+            <Legend color="var(--bad)">Tổng ngân sách · Budget total</Legend>
+            <Legend color="var(--good)">Đã dùng · Budget used</Legend>
             <Legend color="var(--good)" dash>
-              Đã dùng (dự báo)
+              Đã dùng, dự báo · Budget used (forecasted)
             </Legend>
           </>
         ) : (
           <>
-            <Legend color="#2563EB">Doanh thu</Legend>
+            <Legend color="#2563EB">Doanh thu · Revenue</Legend>
             <Legend color="#2563EB" dash>
               Doanh thu (dự báo)
             </Legend>
-            <Legend color="var(--good)">Lợi nhuận</Legend>
+            <Legend color="var(--good)">Lợi nhuận · Profit</Legend>
             <Legend color="var(--good)" dash>
               Lợi nhuận (dự báo)
             </Legend>
@@ -920,11 +928,14 @@ function Chart({
 
 function Box({
   title,
+  en,
   date,
   action,
   children,
 }: {
   title: string;
+  /** Tên gốc bên Productive, để đối chiếu tài liệu. */
+  en?: string;
   date?: string;
   /** Link hành động ở góc phải header, kiểu "New invoice" của Productive. */
   action?: string;
@@ -935,6 +946,7 @@ function Box({
       <div className="mb-2.5 flex items-center justify-between">
         <span className="text-[10.5px] font-bold uppercase tracking-wider text-ink-3">
           {title}
+          {en && <span className="ml-1.5 font-medium normal-case tracking-normal">{en}</span>}
         </span>
         <span className="flex items-center gap-2">
           {action && (
@@ -956,11 +968,18 @@ function Box({
 
 function Row({
   label,
+  en,
   value,
   big,
   tone,
 }: {
   label: string;
+  /**
+   * Thuật ngữ gốc tiếng Anh của Productive, hiện mờ cạnh nhãn tiếng Việt.
+   * Có nó thì đối chiếu thẳng được với tài liệu và biểu đồ bên đó, khỏi phải
+   * đoán "doanh thu" bên mình ứng với chữ nào bên kia.
+   */
+  en?: string;
   value: string;
   big?: boolean;
   tone?: "good" | "bad" | "warn" | undefined;
@@ -969,7 +988,10 @@ function Row({
     tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "";
   return (
     <div className="flex items-baseline justify-between py-[3px]">
-      <span className="text-[12.5px] text-ink-2">{label}</span>
+      <span className="text-[12.5px] text-ink-2">
+        {label}
+        {en && <span className="ml-1.5 text-[11px] text-ink-3">{en}</span>}
+      </span>
       <span className={`num ${big ? "text-[15px] font-bold" : "text-[13px]"} ${c}`}>{value}</span>
     </div>
   );

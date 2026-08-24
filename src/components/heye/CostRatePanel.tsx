@@ -491,6 +491,7 @@ function RateDialog({
 }) {
   const [type, setType] = useState<RateType>(value?.rate_type ?? "monthly");
   const [amount, setAmount] = useState(value ? String(value.amount) : "");
+  const [currency, setCurrency] = useState(value?.currency ?? "VND");
   const [start, setStart] = useState(value?.start_date ?? new Date().toISOString().slice(0, 10));
   const [end, setEnd] = useState(value?.end_date ?? "");
   const [addOh, setAddOh] = useState(value?.add_overhead ?? true);
@@ -507,7 +508,7 @@ function RateDialog({
 
   const week = Object.values(hours).reduce((a, b) => a + Number(b || 0), 0);
   const draft = {
-    ...hours, rate_type: type, amount: Number(amount || 0),
+    ...hours, rate_type: type, amount: Number(amount || 0), currency,
     start_date: start, end_date: end || null,
   } as unknown as CostRate;
   const cap = type === "hourly" ? 0 : periodCapacity(draft, start);
@@ -528,7 +529,10 @@ function RateDialog({
         </DialogHeader>
 
         <div className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
+          {/* Ba ô cùng hàng như ảnh Productive: Kỳ lương | Số tiền | Tiền tệ.
+              Cột currency đã có sẵn trong DB từ đầu, chỉ là form chưa hỏi tới,
+              nên mọi mức giá vốn đều mặc định VND mà không nói ra. */}
+          <div className="grid grid-cols-3 gap-3">
             <L label="Kỳ lương">
               <Select value={type} onValueChange={(v) => setType(v as RateType)}>
                 <SelectTrigger>
@@ -552,6 +556,18 @@ function RateDialog({
                 placeholder={type === "monthly" ? "30000000" : ""}
                 onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
               />
+            </L>
+            <L label="Tiền tệ">
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="VND">VND ₫</SelectItem>
+                  <SelectItem value="USD">USD $</SelectItem>
+                  <SelectItem value="EUR">EUR €</SelectItem>
+                </SelectContent>
+              </Select>
             </L>
           </div>
 
@@ -664,6 +680,7 @@ function RateDialog({
               onSubmit({
                 rate_type: type,
                 amount: Number(amount),
+                currency,
                 ...hours,
                 start_date: start,
                 end_date: end || null,

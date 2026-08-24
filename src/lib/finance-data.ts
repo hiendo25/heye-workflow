@@ -259,11 +259,23 @@ export const BILLING_LABEL: Record<BillingType, string> = {
 
 /** Ai chịu rủi ro khi làm quá dự kiến — điểm quyết định của cách tính tiền. */
 export const BILLING_NOTE: Record<BillingType, string> = {
-  tm: "Làm bao nhiêu tính bấy nhiêu. Vượt dự kiến thì khách trả thêm.",
-  fixed: "Giá cố định. Vượt dự kiến thì công ty tự chịu — nên vẫn phải theo dõi giờ.",
+  tm: "Time & materials — làm bao nhiêu tính bấy nhiêu. Vượt dự kiến thì khách trả thêm.",
+  fixed: "Fixed — giá cố định. Vượt dự kiến thì công ty tự chịu, nên vẫn phải theo dõi giờ.",
   percentage:
-    "Tính theo phần trăm tổng các hạng mục khác: phí quản lý dự án, phí vận hành. Hợp đồng to thì phí to theo.",
-  non_billable: "Không thu tiền khách nhưng vẫn tính chi phí: họp nội bộ, đào tạo, bảo hành.",
+    "Percentage — tính theo phần trăm tổng các hạng mục khác: phí quản lý dự án, phí vận hành. Hợp đồng to thì phí to theo.",
+  non_billable:
+    "Non-billable — không thu tiền khách nhưng vẫn tính chi phí: họp nội bộ, đào tạo, bảo hành.",
+};
+
+/**
+ * Thuật ngữ gốc bên Productive cho từng cách tính tiền.
+ * Giữ riêng khỏi nhãn hiển thị vì badge trong bảng quá hẹp để chứa cả hai.
+ */
+export const BILLING_EN: Record<BillingType, string> = {
+  tm: "Time & materials",
+  fixed: "Fixed",
+  percentage: "Percentage",
+  non_billable: "Non-billable",
 };
 
 /**

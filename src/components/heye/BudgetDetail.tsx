@@ -69,13 +69,13 @@ import type { User } from "@/lib/heye-data";
 
 /** Cột hiện được, bật/tắt qua nút "Cột" giống Fields của Productive. */
 const COLUMNS = [
-  { key: "desc", label: "Cách tính" },
-  { key: "unit", label: "Đơn vị" },
-  { key: "track", label: "Theo dõi" },
-  { key: "estimate", label: "Ước tính" },
-  { key: "quantity", label: "Số lượng" },
-  { key: "price", label: "Đơn giá" },
-  { key: "total", label: "Thành tiền" },
+  { key: "desc", label: "Cách tính", en: "Billing type" },
+  { key: "unit", label: "Đơn vị", en: "Unit" },
+  { key: "track", label: "Theo dõi", en: "Tracking" },
+  { key: "estimate", label: "Ước tính", en: "Estimate" },
+  { key: "quantity", label: "Số lượng", en: "Qty" },
+  { key: "price", label: "Đơn giá", en: "Price" },
+  { key: "total", label: "Thành tiền", en: "Budget total" },
 ] as const;
 type ColKey = (typeof COLUMNS)[number]["key"];
 
@@ -103,13 +103,13 @@ function RowIcon({ s }: { s: BudgetService }) {
  * mọi thứ về một hợp đồng đều nằm trong chính hợp đồng đó.
  */
 const TABS = [
-  { key: "overview", label: "Tổng quan" },
-  { key: "services", label: "Hạng mục" },
-  { key: "time", label: "Giờ" },
-  { key: "expenses", label: "Chi phí" },
-  { key: "invoices", label: "Hóa đơn" },
-  { key: "recurring", label: "Định kỳ" },
-  { key: "feed", label: "Hoạt động" },
+  { key: "overview", label: "Tổng quan", en: "Overview" },
+  { key: "services", label: "Hạng mục", en: "Services" },
+  { key: "time", label: "Giờ", en: "Time" },
+  { key: "expenses", label: "Chi phí", en: "Expenses" },
+  { key: "invoices", label: "Hóa đơn", en: "Invoices" },
+  { key: "recurring", label: "Định kỳ", en: "Recurring" },
+  { key: "feed", label: "Hoạt động", en: "Feed" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -274,6 +274,7 @@ export function BudgetDetail({
               }`}
             >
               {t.label}
+              <span className="ml-1 text-[11px] font-normal text-ink-3">{t.en}</span>
             </button>
           ))}
         </nav>
@@ -327,6 +328,7 @@ export function BudgetDetail({
                 onSelect={(e) => e.preventDefault()}
               >
                 {c.label}
+                <span className="ml-auto pl-3 text-[11px] text-ink-3">{c.en}</span>
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuContent>
